@@ -3,14 +3,6 @@ import weakref
 
 NOTFOUND = object()
 
-# Could possibly use an int as a bitflag to denote which attributes are
-# dirty on a given instance (attrs number from 1..n, and set 2**x = 1)
-
-ddb_name_to_model = {}
-attribute_indexes = weakref.WeakKeyDictionary()
-dirty_attributes = weakref.WeakKeyDictionary()
-
-
 class Attribute:
 
     dirty = weakref.WeakKeyDictionary()
@@ -29,30 +21,42 @@ class Attribute:
         return self.values.get(instance)
 
     def __set__(self, instance, value):
-        global dirty_attributes
         if value is None:
             if not self.nullable:
                 raise TypeError(f'{self.__name} may not be null')
         previous = self.values.get(instance, NOTFOUND)
         self.values[instance] = value
         if value != previous:
-            # type(self).dirty[instance] = self.__name
-            dirty = dirty_attributes.get(instance, 0)
-            dirty_attributes[instance] = dirty | (1 << self.__index)
+            type(type(instance))._changes.set(instance, self.__index)
 
     def __delete__(self, instance):
-        print(f'__delete__({self}, {instance})')
+        # print(f'__delete__({self}, {instance})')
         if not self.nullable:
             raise TypeError(f'{self.__name} may not be null')
         self.values.pop(instance, None)
 
     def __set_name__(self, owner, name):
-        print(f'__set_name__({owner}, {name})')
+        # print(f'__set_name__({owner}, {name})', type(name), dir(name))
+        if not issubclass(owner, Model):
+            msg = "model attributes may only be class attributes of a Model"
+            raise TypeError(msg)
         self.__name = name
         self.__owner = owner
-        index = attribute_indexes.get(owner, 0)
-        self.__index = index
-        attribute_indexes[owner] = index + 1
+        indexes = type(self)._indexes
+        self.__index = indexes.get(owner, 0)
+        indexes[owner] = self.__index + 1
+
+    @classmethod
+    def serialize(cls, value):
+        return str(value)
+
+    @classmethod
+    def deserialize(cls, value):
+        return value
+
+
+Attribute._indexes = weakref.WeakKeyDictionary()
+
 
 
 class IntegerAttribute(Attribute):
@@ -63,6 +67,35 @@ class IntegerAttribute(Attribute):
         super().__set__(instance, value)
 
 
+class Changes:
+
+    def __init__(self, *args, **kwargs):
+        self._changes = weakref.WeakKeyDictionary(*args, **kwargs)
+
+    def _convert(self, instance, value):
+        return {
+            name: getattr(instance, name, None)
+            for index, name in enumerate(type(instance)._members)
+            if (value or 0) & (1 << index)
+        } if value else {}
+
+    def get(self, instance):
+        return self._convert(instance, self._changes.get(instance, 0))
+
+
+    def set(self, instance, index):
+        prev = self._changes.get(instance, 0)
+        self._changes[instance] = prev | (1 << index)
+
+    def unset(self, instance, index):
+        prev = self._changes.get(instance, 0)
+        self._changes[instance] = prev & ~(1 << index)
+
+    def clear(self, instance):
+        self._changes[instance] = 0
+
+
+
 class ModelMeta(type):
 
     @classmethod
@@ -70,33 +103,36 @@ class ModelMeta(type):
         return collections.OrderedDict()
 
     def __new__(cls, name, bases, namespace, **kwds):
+        # print(f'__new__, name={name}, bases={bases}, namespace={namespace}, '
+        #       f'kwds={kwds}')
+        ddb_name = kwds.pop('ddb_name', None) or name
+        if kwds:
+            msg = "invalid class parameter(s): " + ', '.join(kwds.keys())
+            raise TypeError(msg)
         result = type.__new__(cls, name, bases, dict(namespace))
-        print('namespace:', namespace)
-        result.members = tuple(x for x in namespace if not x.startswith('__'))
+        result._members = tuple(x for x in namespace if not x.startswith('__'))
+        result._ddb_name = ddb_name
         return result
 
-    @staticmethod
-    def get_changed(instance):
-        return {
-            name: getattr(instance, name, None)
-            for index, name in enumerate(type(instance).members)
-            if dirty_attributes.get(instance, 0) & (1 << index)
-        }
+    @classmethod
+    def get_changed(metacls, instance):
+        return metacls._changes.get(instance)
 
-    @staticmethod
-    def clear_changed(instance):
-        dirty_attributes[instance] = 0
+    @classmethod
+    def clear_changed(metacls, instance):
+        metacls._changes.clear(instance)
+
+
+ModelMeta._changes = Changes()
 
 
 class Model(metaclass=ModelMeta):
 
     def __init_subclass__(cls, **kwargs):
-        print(f'__init_subclass__({cls}, {kwargs})')
-        ddb_name = kwargs.pop('ddb_name', None)
-        if not ddb_name:
-            ddb_name = cls.__name__
+        # print(f'__init_subclass__({cls}, {kwargs})')
+        ddb_name = kwargs.pop('ddb_name', cls.__name__)
         super().__init_subclass__(**kwargs)
-        ddb_name_to_model[ddb_name] = cls
+        cls._ddb_name = ddb_name
 
 
 class Person(Model):

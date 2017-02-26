@@ -31,6 +31,7 @@ def attr1():
     return SimpleNamespace(
         attr=attr,
         required=attr.required,
+        members=('required', 'optional'),
     )
 
 
@@ -42,6 +43,7 @@ def intattr1():
     return SimpleNamespace(
         attr=attr,
         required=attr.required,
+        members=('required', 'optional'),
     )
 
 
@@ -56,7 +58,37 @@ def person1():
         name=person.name,
         nickname=person.nickname,
         age=person.age,
+        members=('name', 'nickname', 'age'),
     )
+
+
+def test_changes_none(person1):
+    p = person1.person
+    changes = M.Changes()
+    assert changes.get(p) == {}
+
+
+def test_changes_update(person1):
+    p = person1.person
+    changes = M.Changes()
+    assert not changes.get(p)
+    new_name = p.name + 'X'
+    p.name = new_name
+    changes.set(p, person1.members.index('name'))
+    assert changes.get(p) == {'name': new_name}
+
+    new_nickname = (p.nickname or '') + 'X'
+    p.nickname = new_nickname
+    changes.set(p, person1.members.index('nickname'))
+    assert changes.get(p) == {
+        'name': new_name,
+        'nickname': new_nickname,
+    }
+
+    changes.unset(p, person1.members.index('nickname'))
+    assert changes.get(p) == {
+        'name': new_name,
+    }
 
 
 def test_attr_get(attr1):
@@ -81,6 +113,11 @@ def test_attr_del_not_nullable(attr1):
     with pytest.raises(TypeError) as e:
         del attr1.attr.required
     assert str(e.value) == 'required may not be null'
+
+
+@pytest.mark.parametrize('value', [42, None, 'asdf'])
+def test_attr_serialization(attr1, value):
+    assert type(attr1.attr).required.serialize(value) == str(value)
 
 
 def test_intattr_required_get(intattr1):
@@ -117,7 +154,7 @@ def test_intattr_optional_set(intattr1):
 
 
 def test_model_members():
-    assert Person.members == ('name', 'nickname', 'age')
+    assert Person._members == ('name', 'nickname', 'age')
 
 
 def test_clear_changed(person1):
@@ -146,3 +183,12 @@ def test_get_changed(person1):
     p.nickname = 'magician'
     changes['nickname'] = 'magician'
     assert M.ModelMeta.get_changed(p) == changes
+
+
+def test_model_ddb_name_provided():
+    name = 'myddbname'
+    class ModelWithDDBName(M.Model, ddb_name=name):
+        attr = M.Attribute()
+
+
+    assert ModelWithDDBName._ddb_name == name
