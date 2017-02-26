@@ -185,6 +185,42 @@ def test_get_changed(person1):
     assert M.ModelMeta.get_changed(p) == changes
 
 
+def test_change_undo(person1):
+    p = person1.person
+    changes = {}
+
+    M.ModelMeta.clear_changed(p)
+    original_name = p.name
+    type(p).name.reset(p, p.name)
+    p.name = original_name + 'X'
+    assert M.ModelMeta.get_changed(p) == {
+        'name': original_name + 'X'
+    }
+
+    # setting back to original value should no longer show a change:
+    p.name = original_name
+    assert M.ModelMeta.get_changed(p) == {}
+
+
+def test_change_undo_multiple(person1):
+    p = person1.person
+    changes = {}
+
+    M.ModelMeta.clear_changed(p)
+    original_name = p.name
+    type(p).name.reset(p, p.name)
+    new_name1 = original_name + 'X'
+    new_name2 = new_name1 + 'X'
+    p.name = new_name1
+    p.name = new_name2
+    assert M.ModelMeta.get_changed(p) == {
+        'name': new_name2,
+    }
+
+    p.name = original_name
+    assert not M.ModelMeta.get_changed(p)
+
+
 def test_model_ddb_name_provided():
     name = 'myddbname'
     class ModelWithDDBName(M.Model, ddb_name=name):

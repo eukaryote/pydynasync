@@ -10,10 +10,19 @@ class Attribute:
     def __init__(self, *, nullable=False):
         self.__nullable = nullable
         self.values = weakref.WeakKeyDictionary()
+        self.original = weakref.WeakKeyDictionary()
 
     @property
     def nullable(self):
         return self.__nullable
+
+    def reset(self, instance, value):
+        """
+        Set value for instance and use that value as the original value
+        for change tracking.
+        """
+        self.original[instance] = value
+        self._set(instance, value)
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -24,10 +33,19 @@ class Attribute:
         if value is None:
             if not self.nullable:
                 raise TypeError(f'{self.__name} may not be null')
-        previous = self.values.get(instance, NOTFOUND)
+
+        if self.values.get(instance, NOTFOUND) == value:
+            return
+
+        update = getattr(
+            type(type(instance))._changes,
+            'unset' if value == self.original.get(instance, NOTFOUND) else 'set',
+        )
+        update(instance, self.__index)
+        self._set(instance, value)
+
+    def _set(self, instance, value):
         self.values[instance] = value
-        if value != previous:
-            type(type(instance))._changes.set(instance, self.__index)
 
     def __delete__(self, instance):
         # print(f'__delete__({self}, {instance})')
@@ -69,8 +87,8 @@ class IntegerAttribute(Attribute):
 
 class Changes:
 
-    def __init__(self, *args, **kwargs):
-        self._changes = weakref.WeakKeyDictionary(*args, **kwargs)
+    def __init__(self):
+        self._changes = weakref.WeakKeyDictionary()
 
     def _convert(self, instance, value):
         return {
@@ -82,7 +100,6 @@ class Changes:
     def get(self, instance):
         return self._convert(instance, self._changes.get(instance, 0))
 
-
     def set(self, instance, index):
         prev = self._changes.get(instance, 0)
         self._changes[instance] = prev | (1 << index)
@@ -93,6 +110,7 @@ class Changes:
 
     def clear(self, instance):
         self._changes[instance] = 0
+
 
 
 
