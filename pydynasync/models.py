@@ -100,13 +100,22 @@ class Model(metaclass=ModelMeta):
             getattr(self, name, None) for name in type(self)._members
         )
 
+    def __hash__(self):
+        return object.__hash__(self._key())
+
     def __eq__(self, other):
-        if not isinstance(other, type(self)):
-            return False
+        if other is self:
+            return True
+        elif type(self) != type(other):
+            return NotImplemented
         key = self._key()
         return (key == other._key()
                 if key is not self
                 else self is other)
 
-    def __hash__(self):
-        return object.__hash__(self._key())
+    def __ne__(self, other):
+        if other is self:
+            return False
+        elif type(self) != type(other):
+            return NotImplemented
+        return not(self == other)
