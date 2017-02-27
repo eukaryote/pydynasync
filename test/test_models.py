@@ -1,3 +1,4 @@
+import gc
 from types import SimpleNamespace
 from unittest.mock import patch
 import weakref
@@ -339,3 +340,35 @@ def test_model_equality_when_weakref_call():
 
     assert p1 == p2
     assert p2 == p1
+
+
+def test_garbage_collection_of_model():
+
+    class P1(M.Model):
+
+        attr = M.Attribute()
+
+    class P2(M.Model):
+
+        attr = M.Attribute()
+
+
+    ref1 = weakref.ref(P1)
+    ref2 = weakref.ref(P2)
+
+    p1, p2 = P1(), P2()
+    p1.attr = 'myvalue'
+    p2.attr = 'othervalue'
+    assert ref1()
+    assert ref2()
+
+    del p1
+    del P1
+    gc.collect()
+    assert not ref1()
+    assert ref2()
+
+    del p2
+    del P2
+    gc.collect()
+    assert not ref2()
