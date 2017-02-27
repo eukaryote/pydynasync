@@ -6,7 +6,7 @@ import traceback
 from traceback import walk_stack
 from weakref import ref, WeakKeyDictionary
 
-from .const import is_reserved_word
+from . import ddb
 
 NOTFOUND = object()
 NOTSET = object()
@@ -88,7 +88,7 @@ class Attribute:
         # on the instance for the actual ddb name; we verify here
         # in either case that it's not a dynamodb reserved word.
         ddb_name = self.ddb_name or name
-        if is_reserved_word(ddb_name):
+        if ddb.is_reserved_word(ddb_name):
             msg = (f"invalid DynamoDB attribute name: '{ddb_name}' is a "
                    "reserved word")
             raise ValueError(msg)
