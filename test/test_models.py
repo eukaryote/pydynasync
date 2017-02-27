@@ -277,7 +277,7 @@ def test_model_key_when_weakref_call():
 
     p1, p2 = P(), P()
 
-    with patch('test.test_models.M.is_weakref_call') as is_weakref_call:
+    with patch('pydynasync.models.util.is_weakref_call') as is_weakref_call:
         is_weakref_call.return_value = True
         assert p1._key() is p1
         assert p2._key() is p2
@@ -333,7 +333,7 @@ def test_model_equality_when_weakref_call():
 
     # when called from a weakref target method, the
     # hash and equality use the default object semantics
-    with patch('test.test_models.M.is_weakref_call') as is_weakref_call:
+    with patch('pydynasync.models.util.is_weakref_call') as is_weakref_call:
         is_weakref_call.return_value = True
         assert p1 != p2
         assert p2 != p1

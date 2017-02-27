@@ -6,25 +6,10 @@ import traceback
 from traceback import walk_stack
 from weakref import ref, WeakKeyDictionary
 
-from . import ddb
+from . import ddb, util
 
 NOTFOUND = object()
 NOTSET = object()
-
-
-weakkeydict_codes = tuple(
-    func.__code__ for _, func in
-        inspect.getmembers(WeakKeyDictionary, inspect.isfunction)
-)
-
-def is_weakref_call(*, framenum=2):
-    for frame, _ in traceback.walk_stack(sys._getframe(framenum)):
-        try:
-            if frame.f_code in weakkeydict_codes:
-                return True
-        except AttributeError:
-            pass
-    return False
 
 
 class Attribute:
@@ -211,7 +196,7 @@ class Model(metaclass=ModelMeta):
         # one of the target weakref methods, we use the tuple of
         # all member values as the key for equality testing and hashing,
         # which is what users of the library will expect.
-        return self if is_weakref_call() else tuple(
+        return self if util.is_weakref_call() else tuple(
             getattr(self, name, None) for name in type(self)._members
         )
 
