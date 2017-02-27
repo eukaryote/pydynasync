@@ -29,14 +29,19 @@ def is_weakref_call(*, framenum=2):
 
 class Attribute:
 
-    def __init__(self, *, nullable=False):
+    def __init__(self, *, nullable=False, ddb_name=None):
         self.__nullable = nullable
+        self.__ddb_name = ddb_name
         self.values = WeakKeyDictionary()
         self.original = WeakKeyDictionary()
 
     @property
     def nullable(self):
         return self.__nullable
+
+    @property
+    def ddb_name(self):
+        return self.__ddb_name
 
     def reset(self, instance, value):
         """
@@ -79,10 +84,15 @@ class Attribute:
         if not issubclass(owner, Model):
             msg = "model attributes may only be class attributes of a Model"
             raise TypeError(msg)
-        if is_reserved_word(name):
-            msg = (f"invalid attribute name: '{name}' is a "
-                   "DynamoDB reserved word")
+        # If no ddb_name was provided, then we use the name of the attribute
+        # on the instance for the actual ddb name; we verify here
+        # in either case that it's not a dynamodb reserved word.
+        ddb_name = self.ddb_name or name
+        if is_reserved_word(ddb_name):
+            msg = (f"invalid DynamoDB attribute name: '{ddb_name}' is a "
+                   "reserved word")
             raise ValueError(msg)
+        self.__ddb_name = ddb_name
         self.__name = name
         self.__owner = owner
         indexes = type(self)._indexes

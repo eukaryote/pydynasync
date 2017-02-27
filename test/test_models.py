@@ -386,5 +386,21 @@ def test_attribute_name_not_reserved_word():
     cause = e.value.__cause__
     assert isinstance(cause, ValueError)
 
-    msg = "invalid attribute name: 'exists' is a DynamoDB reserved word"
+    msg = "invalid DynamoDB attribute name: 'exists' is a reserved word"
     assert str(cause) == msg
+
+
+def test_attribute_name_ddb_name():
+
+    class P1(M.Model):
+
+        name = M.Attribute(ddb_name='name_')
+
+
+    assert P1.name.ddb_name == 'name_'
+
+    class P2(M.Model):
+
+        name_ = M.Attribute()
+
+    assert P2.name_.ddb_name == 'name_'
