@@ -190,7 +190,6 @@ def test_get_changed(person1):
 
 def test_change_undo(person1):
     p = person1.person
-    changes = {}
 
     M.ModelMeta.clear_changed(p)
     original_name = p.name_
@@ -207,7 +206,6 @@ def test_change_undo(person1):
 
 def test_change_undo_multiple(person1):
     p = person1.person
-    changes = {}
 
     M.ModelMeta.clear_changed(p)
     original_name = p.name_

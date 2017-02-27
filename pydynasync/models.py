@@ -1,10 +1,5 @@
 import collections
-import inspect
-import itertools
-import sys
-import traceback
-from traceback import walk_stack
-from weakref import ref, WeakKeyDictionary
+from weakref import WeakKeyDictionary
 
 from . import ddb, util
 
