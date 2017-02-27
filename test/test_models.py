@@ -6,63 +6,9 @@ import weakref
 import pytest
 
 import pydynasync.models as M
+import pydynasync.attributes as A
 
-
-class AttrTest(M.Model):
-
-    required = M.Attribute()
-    optional = M.Attribute(nullable=True)
-
-
-class IntAttrTest(M.Model):
-
-    required = M.IntegerAttribute()
-    optional = M.IntegerAttribute(nullable=True)
-
-
-class Person(M.Model):
-
-    name_ = M.Attribute()
-    nickname = M.Attribute(nullable=True)
-    age = M.IntegerAttribute()
-
-
-@pytest.fixture
-def attr1():
-    attr = AttrTest()
-    attr.required = 'required-value'
-    return SimpleNamespace(
-        attr=attr,
-        required=attr.required,
-        members=('required', 'optional'),
-    )
-
-
-@pytest.fixture
-def intattr1():
-    attr = IntAttrTest()
-    attr.required = 42
-    M.ModelMeta.clear_changed(attr)
-    return SimpleNamespace(
-        attr=attr,
-        required=attr.required,
-        members=('required', 'optional'),
-    )
-
-
-@pytest.fixture
-def person1():
-    person = Person()
-    person.name_ = 'Job Bluth'
-    person.age = 35
-    M.ModelMeta.clear_changed(person)
-    return SimpleNamespace(
-        person=person,
-        name_=person.name_,
-        nickname=person.nickname,
-        age=person.age,
-        members=('name_', 'nickname', 'age'),
-    )
+from test import AttrTest, IntAttrTest, Person
 
 
 def test_changes_none(person1):
@@ -92,68 +38,6 @@ def test_changes_update(person1):
     assert changes.get(p) == {
         'name_': new_name,
     }
-
-
-def test_attr_get(attr1):
-    assert attr1.attr.required == attr1.required
-
-
-def test_attr_set(attr1):
-    new_value = attr1.attr.required + 'X'
-    attr1.attr.required = new_value
-    assert attr1.attr.required == new_value
-
-
-def test_attr_del_nullable(attr1):
-    a = attr1.attr
-    a.optional = 'foo'
-    assert a.optional == 'foo'
-    del a.optional
-    assert a.optional is None
-
-
-def test_attr_del_not_nullable(attr1):
-    with pytest.raises(TypeError) as e:
-        del attr1.attr.required
-    assert str(e.value) == 'required may not be null'
-
-
-@pytest.mark.parametrize('value', [42, None, 'asdf'])
-def test_attr_serialization(attr1, value):
-    assert type(attr1.attr).required.serialize(value) == str(value)
-
-
-def test_intattr_required_get(intattr1):
-    assert intattr1.attr.required == intattr1.required
-
-
-def test_intattr_required_set(intattr1):
-    a = intattr1.attr
-    new_value = a.required + 1
-    a.required = new_value
-    assert a.required == new_value
-
-    with pytest.raises(TypeError) as e:
-        a.required = '42'
-    # TODO: improve error message
-    assert str(e.value) == '42 should be an int'
-
-
-def test_intattr_optional_set(intattr1):
-    a = intattr1.attr
-
-    # can set to int
-    assert a.optional != a.required
-    a.optional = a.required
-    assert a.optional == a.required
-
-    # can set to null
-    a.optional = None
-
-    # can't set to non-int/none
-    with pytest.raises(TypeError) as e:
-        a.optional = '42'
-    assert str(e.value) == '42 should be an int'
 
 
 def test_model_members():
@@ -225,7 +109,7 @@ def test_change_undo_multiple(person1):
 def test_model_ddb_name_provided():
     name = 'myddbname'
     class ModelWithDDBName(M.Model, ddb_name=name):
-        attr = M.Attribute()
+        attr = A.Attribute()
 
 
     assert ModelWithDDBName._ddb_name == name
@@ -234,8 +118,8 @@ def test_model_ddb_name_provided():
 def test_model_init_keyword_args():
 
     class MyModel(M.Model):
-        attr1 = M.Attribute()
-        attr2 = M.Attribute()
+        attr1 = A.Attribute()
+        attr2 = A.Attribute()
 
     m = MyModel(attr1='1', attr2='2')
     assert m.attr1 == '1'
@@ -250,8 +134,8 @@ def test_model_key_when_not_weakref_call():
 
     class P(M.Model):
 
-        attr1 = M.Attribute()
-        attr2 = M.Attribute()
+        attr1 = A.Attribute()
+        attr2 = A.Attribute()
 
     p = P()
     assert p._key() == (None, None)
@@ -271,7 +155,7 @@ def test_model_key_when_weakref_call():
 
     class P(M.Model):
 
-        attr1 = M.Attribute()
+        attr1 = A.Attribute()
 
     p1, p2 = P(), P()
 
@@ -322,7 +206,7 @@ def test_model_equality_when_weakref_call():
 
     class P(M.Model):
 
-        attr1 = M.Attribute()
+        attr1 = A.Attribute()
 
     p1, p2 = P(), P()
 
@@ -344,11 +228,11 @@ def test_garbage_collection_of_model():
 
     class P1(M.Model):
 
-        attr = M.Attribute()
+        attr = A.Attribute()
 
     class P2(M.Model):
 
-        attr = M.Attribute()
+        attr = A.Attribute()
 
 
     ref1 = weakref.ref(P1)
@@ -370,35 +254,3 @@ def test_garbage_collection_of_model():
     del P2
     gc.collect()
     assert not ref2()
-
-
-def test_attribute_name_not_reserved_word():
-
-    # Python intercepts the ValueError and raises a RuntimeError
-    with pytest.raises(RuntimeError) as e:
-
-        class P(M.Model):
-
-            exists = M.Attribute()
-
-    cause = e.value.__cause__
-    assert isinstance(cause, ValueError)
-
-    msg = "invalid DynamoDB attribute name: 'exists' is a reserved word"
-    assert str(cause) == msg
-
-
-def test_attribute_name_ddb_name():
-
-    class P1(M.Model):
-
-        name = M.Attribute(ddb_name='name_')
-
-
-    assert P1.name.ddb_name == 'name_'
-
-    class P2(M.Model):
-
-        name_ = M.Attribute()
-
-    assert P2.name_.ddb_name == 'name_'
