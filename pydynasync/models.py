@@ -1,16 +1,36 @@
 import collections
-import weakref
+import inspect
+import itertools
+import sys
+import traceback
+from traceback import walk_stack
+from weakref import ref, WeakKeyDictionary
 
 NOTFOUND = object()
+NOTSET = object()
+
+
+weakkeydict_codes = tuple(
+    func.__code__ for _, func in
+        inspect.getmembers(WeakKeyDictionary, inspect.isfunction)
+)
+
+def is_weakref_call(*, framenum=2):
+    for frame, _ in traceback.walk_stack(sys._getframe(framenum)):
+        try:
+            if frame.f_code in weakkeydict_codes:
+                return True
+        except AttributeError:
+            pass
+    return False
+
 
 class Attribute:
 
-    dirty = weakref.WeakKeyDictionary()
-
     def __init__(self, *, nullable=False):
         self.__nullable = nullable
-        self.values = weakref.WeakKeyDictionary()
-        self.original = weakref.WeakKeyDictionary()
+        self.values = WeakKeyDictionary()
+        self.original = WeakKeyDictionary()
 
     @property
     def nullable(self):
@@ -27,7 +47,8 @@ class Attribute:
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return self.values.get(instance)
+        val = self.values.get(instance)
+        return val if val is not NOTSET else None
 
     def __set__(self, instance, value):
         if value is None:
@@ -48,13 +69,11 @@ class Attribute:
         self.values[instance] = value
 
     def __delete__(self, instance):
-        # print(f'__delete__({self}, {instance})')
         if not self.nullable:
             raise TypeError(f'{self.__name} may not be null')
         self.values.pop(instance, None)
 
     def __set_name__(self, owner, name):
-        # print(f'__set_name__({owner}, {name})', type(name), dir(name))
         if not issubclass(owner, Model):
             msg = "model attributes may only be class attributes of a Model"
             raise TypeError(msg)
@@ -73,7 +92,7 @@ class Attribute:
         return value
 
 
-Attribute._indexes = weakref.WeakKeyDictionary()
+Attribute._indexes = WeakKeyDictionary()
 
 
 
@@ -88,7 +107,7 @@ class IntegerAttribute(Attribute):
 class Changes:
 
     def __init__(self):
-        self._changes = weakref.WeakKeyDictionary()
+        self._changes = WeakKeyDictionary()
 
     def _convert(self, instance, value):
         return {
@@ -151,6 +170,45 @@ class Model(metaclass=ModelMeta):
         ddb_name = kwargs.pop('ddb_name', cls.__name__)
         super().__init_subclass__(**kwargs)
         cls._ddb_name = ddb_name
+
+    def __init__(self, *, _reset=False, **kwargs):
+        members = type(self)._members
+        for name in members:
+            descriptor = getattr(type(self), name)
+            value = kwargs.pop(name, NOTSET)
+            if value is not NOTSET:
+                if _reset:
+                    descriptor.reset(self, value)
+                else:
+                    setattr(self, name, value)
+        if kwargs:
+            raise TypeError("invalid attributes: " + ', '.join(kwargs.keys()))
+
+    def _key(self):
+        """
+        Get instance key to be used for equality testing and hashing.
+        """
+        # Instances of this class are stored in a WeakKeyDictionary, and in
+        # that context, equality and hashing should follow object()
+        # semantics (based on object identity and never changing regardless
+        # of changes to member values), but when not being called from
+        # one of the target weakref methods, we use the tuple of
+        # all member values as the key for equality testing and hashing,
+        # which is what users of the library will expect.
+        return self if is_weakref_call() else tuple(
+            getattr(self, name, None) for name in type(self)._members
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return False
+        key = self._key()
+        return (key == other._key()
+                if key is not self
+                else self is other)
+
+    def __hash__(self):
+        return object.__hash__(self._key())
 
 
 class Person(Model):

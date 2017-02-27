@@ -1,4 +1,6 @@
 from types import SimpleNamespace
+from unittest.mock import patch
+import weakref
 
 import pytest
 
@@ -228,3 +230,112 @@ def test_model_ddb_name_provided():
 
 
     assert ModelWithDDBName._ddb_name == name
+
+
+def test_model_init_keyword_args():
+
+    class MyModel(M.Model):
+        attr1 = M.Attribute()
+        attr2 = M.Attribute()
+
+    m = MyModel(attr1='1', attr2='2')
+    assert m.attr1 == '1'
+    assert m.attr2 == '2'
+
+
+def test_model_key_when_not_weakref_call():
+    """
+    Equality checking is based on instance member values when not checked
+    from one of the expected WeakKeyDictionary methods.
+    """
+
+    class P(M.Model):
+
+        attr1 = M.Attribute()
+        attr2 = M.Attribute()
+
+    p = P()
+    assert p._key() == (None, None)
+
+    p.attr2 = 'foo'
+    assert p._key() == (None, 'foo')
+
+    p.attr1 = 'bar'
+    assert p._key() == ('bar', 'foo')
+
+
+def test_model_key_when_weakref_call():
+    """
+    Equality checking is based solely on the object itself when checked
+    from one of the expected WeakKeyDictionary methods.
+    """
+
+    class P(M.Model):
+
+        attr1 = M.Attribute()
+
+    p1, p2 = P(), P()
+
+    with patch('test.test_models.M.is_weakref_call') as is_weakref_call:
+        is_weakref_call.return_value = True
+        assert p1._key() is p1
+        assert p2._key() is p2
+
+
+
+def test_model_equality_empty():
+    a1, a2 = AttrTest(), AttrTest()
+    assert a1 == a2
+    assert a2 == a1
+
+    i1 = IntAttrTest()
+    assert a1._key() == i1._key()
+    assert a1 != i1
+    assert i1 != a1
+
+    a1.required = 42
+    i1.required = 42
+    assert a1 != i1
+    assert i1 != a1
+
+
+def test_model_equality_nonempty():
+    name = 'foo'
+    p1, p2 = Person(), Person()
+    p1.name = name
+
+    assert p1 == p1
+    assert p1 != p2
+    assert p2 != p1
+
+    p2.name = name
+
+    assert p1 == p2
+    assert p2 == p1
+
+    p1.name = p1.name + 'X'
+    assert p2 != p1
+    assert p1 != p2
+
+
+
+def test_model_equality_when_weakref_call():
+
+    class P(M.Model):
+
+        attr1 = M.Attribute()
+
+    p1, p2 = P(), P()
+
+    assert p1 == p2
+    assert p2 == p1
+
+    # when called from a weakref target method, the
+    # hash and equality use the default object semantics
+    with patch('test.test_models.M.is_weakref_call') as is_weakref_call:
+        is_weakref_call.return_value = True
+        assert p1 != p2
+        assert p2 != p1
+
+    assert p1 == p2
+    assert p2 == p1
