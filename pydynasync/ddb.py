@@ -2,6 +2,10 @@
 DynamoDB utilities.
 """
 
+# bounds for numbers (integers or decimals), according to the dev guide;
+# these are the non-inclusive min/max
+NUMBER_RANGE = (-1E130, 1E125)
+
 
 def is_reserved_word(word):
     """

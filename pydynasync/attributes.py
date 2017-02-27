@@ -1,3 +1,4 @@
+import decimal
 import weakref
 
 from . import ddb, models, util
@@ -83,12 +84,10 @@ class Attribute:
         self.__index = indexes.get(owner, 0)
         indexes[owner] = self.__index + 1
 
-    @classmethod
-    def serialize(cls, value):
+    def serialize(self, value):
         return value if isinstance(value, str) else str(value)
 
-    @classmethod
-    def deserialize(cls, value):
+    def deserialize(self, value):
         return value
 
 
@@ -102,19 +101,102 @@ class Binary(Attribute):
             msg = f'BinaryAttribute requires bytes value, not {type(value)}'
             raise TypeError(msg)
 
-    @classmethod
-    def serialize(cls, value):
-        return Attribute.serialize(base64.b64encode(value))
+    def serialize(self, value):
+        return super().serialize(base64.b64encode(value))
 
-    @classmethod
-    def deserialize(cls, value):
-        return Attribute.deserialize(base64.b64decode(value))
+    def deserialize(self, value):
+        return super().deserialize(base64.b64decode(value))
 
 
+class Number(Attribute):
 
-class Integer(Attribute):
+    def _check(self, value):
+        if value is None and self.nullable:
+            return None
+
+        if not isinstance(value, (int, float, decimal.Decimal)):
+            msg = f'{value} should be an int, float, or decimal.Decimal'
+            raise TypeError(msg)
+        elif not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
+            raise ValueError(f'{value} is outside permitted numeric range')
+        return value
 
     def __set__(self, instance, value):
-        if not (isinstance(value, int) or (value is None and self.nullable)):
+        super().__set__(instance, self._check(value))
+
+    def serialize(self, value):
+        value = self._check(value)
+        return None if value is None else str(value)
+
+    def deserialize(self, value):
+        if self.nullable and value is None:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return float(value)
+
+
+class Integer(Number):
+
+    def _check(self, value):
+        if value is None and self.nullable:
+            return value
+        if not isinstance(value, int):
             raise TypeError(f'{value} should be an int')
-        super().__set__(instance, value)
+        return super()._check(value)
+
+    def deserialize(self, value):
+        if self.nullable and value is None:
+            return None
+        return int(value)
+
+
+class Decimal(Number):
+
+    def _check(self, value):
+        if value is None and self.nullable:
+            return value
+        if not isinstance(value, (float, decimal.Decimal)):
+            raise TypeError(f'{value} should be a float or decimal.Decimal')
+        if isinstance(value, float):
+            value = decimal.Decimal(str(value))
+        return value
+
+    def __set__(self, instance, value):
+        super().__set__(instance, self._check(value))
+
+    def serialize(self, value):
+        value = self._check(value)
+        return None if value is None else str(value)
+
+    def deserialize(self, value):
+        if self.nullable and value is None:
+            return None
+        return decimal.Decimal(value)
+
+
+class Boolean(Attribute):
+
+    def _check(self, value):
+        if not (isinstance(value, bool) or (value is None and self.nullable)):
+            raise TypeError(f'{value} should be a bool')
+        return value
+
+    def __set__(self, instance, value):
+        super().__set__(instance, self._check(value))
+
+    def serialize(self, value):
+        value = self._check(value)
+        return None if value is None else ('true' if value else 'false')
+
+    def deserialize(self, value):
+        if self.nullable and value is None:
+            return None
+        result = {'true': True, 'false': False}.get(value)
+        if result is None:
+            msg = ("serialized boolean value should be 'true' or 'false', "
+                   f"not {value}")
+            raise ValueError(msg)
+        return result
+

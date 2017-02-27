@@ -8,10 +8,28 @@ class AttrTest(M.Model):
     optional = A.Attribute(nullable=True)
 
 
+class NumTest(M.Model):
+
+    required = A.Number()
+    optional = A.Number(nullable=True)
+
+
 class IntTest(M.Model):
 
     required = A.Integer()
     optional = A.Integer(nullable=True)
+
+
+class DecTest(M.Model):
+
+    required = A.Decimal()
+    optional = A.Decimal(nullable=True)
+
+
+class BoolTest(M.Model):
+
+    required = A.Boolean()
+    optional = A.Boolean(nullable=True)
 
 
 class Person(M.Model):
