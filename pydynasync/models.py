@@ -6,6 +6,8 @@ import traceback
 from traceback import walk_stack
 from weakref import ref, WeakKeyDictionary
 
+from .const import is_reserved_word
+
 NOTFOUND = object()
 NOTSET = object()
 
@@ -77,6 +79,10 @@ class Attribute:
         if not issubclass(owner, Model):
             msg = "model attributes may only be class attributes of a Model"
             raise TypeError(msg)
+        if is_reserved_word(name):
+            msg = (f"invalid attribute name: '{name}' is a "
+                   "DynamoDB reserved word")
+            raise ValueError(msg)
         self.__name = name
         self.__owner = owner
         indexes = type(self)._indexes
@@ -209,21 +215,3 @@ class Model(metaclass=ModelMeta):
 
     def __hash__(self):
         return object.__hash__(self._key())
-
-
-class Person(Model):
-
-    name = Attribute()
-    age = IntegerAttribute()
-    hair_color = Attribute()
-
-
-me = Person()
-me.name = 'Joseph Knecht'
-me.age = 42
-me.hair_color = 'brown'
-
-other = Person()
-other.name = 'Fritz Tegularius'
-other.age = 29
-other.hair_color = 'blonde'

@@ -57,8 +57,12 @@ class ProjectionType(enum.Enum):
     INCLUDE = 'INCLUDE'
 
 
+def is_reserved_word(word):
+    return word.upper() in ddb_reserved_words
+
+
 # http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ReservedWords.html
-ReservedWords = {
+ddb_reserved_words = {
     'ABORT', 'ABSOLUTE', 'ACTION', 'ADD', 'AFTER', 'AGENT', 'AGGREGATE',
     'ALL', 'ALLOCATE', 'ALTER', 'ANALYZE', 'AND', 'ANY', 'ARCHIVE', 'ARE',
     'ARRAY', 'AS', 'ASC', 'ASCII', 'ASENSITIVE', 'ASSERTION', 'ASYMMETRIC',

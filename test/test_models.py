@@ -22,7 +22,7 @@ class IntAttrTest(M.Model):
 
 class Person(M.Model):
 
-    name = M.Attribute()
+    name_ = M.Attribute()
     nickname = M.Attribute(nullable=True)
     age = M.IntegerAttribute()
 
@@ -53,15 +53,15 @@ def intattr1():
 @pytest.fixture
 def person1():
     person = Person()
-    person.name = 'Job Bluth'
+    person.name_ = 'Job Bluth'
     person.age = 35
     M.ModelMeta.clear_changed(person)
     return SimpleNamespace(
         person=person,
-        name=person.name,
+        name_=person.name_,
         nickname=person.nickname,
         age=person.age,
-        members=('name', 'nickname', 'age'),
+        members=('name_', 'nickname', 'age'),
     )
 
 
@@ -75,22 +75,22 @@ def test_changes_update(person1):
     p = person1.person
     changes = M.Changes()
     assert not changes.get(p)
-    new_name = p.name + 'X'
-    p.name = new_name
-    changes.set(p, person1.members.index('name'))
-    assert changes.get(p) == {'name': new_name}
+    new_name = p.name_ + 'X'
+    p.name_ = new_name
+    changes.set(p, person1.members.index('name_'))
+    assert changes.get(p) == {'name_': new_name}
 
     new_nickname = (p.nickname or '') + 'X'
     p.nickname = new_nickname
     changes.set(p, person1.members.index('nickname'))
     assert changes.get(p) == {
-        'name': new_name,
+        'name_': new_name,
         'nickname': new_nickname,
     }
 
     changes.unset(p, person1.members.index('nickname'))
     assert changes.get(p) == {
-        'name': new_name,
+        'name_': new_name,
     }
 
 
@@ -157,12 +157,12 @@ def test_intattr_optional_set(intattr1):
 
 
 def test_model_members():
-    assert Person._members == ('name', 'nickname', 'age')
+    assert Person._members == ('name_', 'nickname', 'age')
 
 
 def test_clear_changed(person1):
     p = person1.person
-    p.name += 'X'
+    p.name_ += 'X'
     assert M.ModelMeta.get_changed(p)
     M.ModelMeta.clear_changed(p)
     assert not M.ModelMeta.get_changed(p)
@@ -174,13 +174,13 @@ def test_get_changed(person1):
 
     assert M.ModelMeta.get_changed(p) == changes
 
-    original = p.name
+    original = p.name_
 
-    p.name = original
+    p.name_ = original
     assert M.ModelMeta.get_changed(p) == changes
 
-    p.name = original + 'X'
-    changes['name'] = original + 'X'
+    p.name_ = original + 'X'
+    changes['name_'] = original + 'X'
     assert M.ModelMeta.get_changed(p) == changes
 
     p.nickname = 'magician'
@@ -193,15 +193,15 @@ def test_change_undo(person1):
     changes = {}
 
     M.ModelMeta.clear_changed(p)
-    original_name = p.name
-    type(p).name.reset(p, p.name)
-    p.name = original_name + 'X'
+    original_name = p.name_
+    type(p).name_.reset(p, p.name_)
+    p.name_ = original_name + 'X'
     assert M.ModelMeta.get_changed(p) == {
-        'name': original_name + 'X'
+        'name_': original_name + 'X'
     }
 
     # setting back to original value should no longer show a change:
-    p.name = original_name
+    p.name_ = original_name
     assert M.ModelMeta.get_changed(p) == {}
 
 
@@ -210,17 +210,17 @@ def test_change_undo_multiple(person1):
     changes = {}
 
     M.ModelMeta.clear_changed(p)
-    original_name = p.name
-    type(p).name.reset(p, p.name)
+    original_name = p.name_
+    type(p).name_.reset(p, p.name_)
     new_name1 = original_name + 'X'
     new_name2 = new_name1 + 'X'
-    p.name = new_name1
-    p.name = new_name2
+    p.name_ = new_name1
+    p.name_ = new_name2
     assert M.ModelMeta.get_changed(p) == {
-        'name': new_name2,
+        'name_': new_name2,
     }
 
-    p.name = original_name
+    p.name_ = original_name
     assert not M.ModelMeta.get_changed(p)
 
 
@@ -303,18 +303,18 @@ def test_model_equality_empty():
 def test_model_equality_nonempty():
     name = 'foo'
     p1, p2 = Person(), Person()
-    p1.name = name
+    p1.name_ = name
 
     assert p1 == p1
     assert p1 != p2
     assert p2 != p1
 
-    p2.name = name
+    p2.name_ = name
 
     assert p1 == p2
     assert p2 == p1
 
-    p1.name = p1.name + 'X'
+    p1.name_ = p1.name_ + 'X'
     assert p2 != p1
     assert p1 != p2
 
@@ -372,3 +372,19 @@ def test_garbage_collection_of_model():
     del P2
     gc.collect()
     assert not ref2()
+
+
+def test_attribute_name_not_reserved_word():
+
+    # Python intercepts the ValueError and raises a RuntimeError
+    with pytest.raises(RuntimeError) as e:
+
+        class P(M.Model):
+
+            exists = M.Attribute()
+
+    cause = e.value.__cause__
+    assert isinstance(cause, ValueError)
+
+    msg = "invalid attribute name: 'exists' is a DynamoDB reserved word"
+    assert str(cause) == msg
