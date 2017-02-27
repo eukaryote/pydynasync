@@ -8,7 +8,7 @@ import pytest
 import pydynasync.models as M
 import pydynasync.attributes as A
 
-from test import AttrTest, IntAttrTest, Person
+from test import AttrTest, IntTest, Person
 
 
 def test_changes_none(person1):
@@ -171,7 +171,7 @@ def test_model_equality_empty():
     assert a1 == a2
     assert a2 == a1
 
-    i1 = IntAttrTest()
+    i1 = IntTest()
     assert a1._key() == i1._key()
     assert a1 != i1
     assert i1 != a1

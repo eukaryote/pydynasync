@@ -8,7 +8,7 @@ from pydynasync import devguide, exp
 from pydynasync import attributes as A, models as M
 from pydynasync.const import KeyType, ProjectionType, StreamViewType, Type
 
-from test import AttrTest, IntAttrTest, Person
+from test import AttrTest, IntTest, Person
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def attr1():
 
 @pytest.fixture
 def intattr1():
-    attr = IntAttrTest()
+    attr = IntTest()
     attr.required = 42
     M.ModelMeta.clear_changed(attr)
     return types.SimpleNamespace(

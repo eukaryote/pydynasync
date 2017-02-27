@@ -8,14 +8,14 @@ class AttrTest(M.Model):
     optional = A.Attribute(nullable=True)
 
 
-class IntAttrTest(M.Model):
+class IntTest(M.Model):
 
-    required = A.IntegerAttribute()
-    optional = A.IntegerAttribute(nullable=True)
+    required = A.Integer()
+    optional = A.Integer(nullable=True)
 
 
 class Person(M.Model):
 
     name_ = A.Attribute()
     nickname = A.Attribute(nullable=True)
-    age = A.IntegerAttribute()
+    age = A.Integer()

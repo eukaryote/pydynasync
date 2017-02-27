@@ -95,7 +95,7 @@ class Attribute:
 Attribute._indexes = weakref.WeakKeyDictionary()
 
 
-class BinaryAttribute(Attribute):
+class Binary(Attribute):
 
     def __set__(self, instance, value):
         if not (isinstance(value, bytes) or (value is None and self.nullable)):
@@ -112,7 +112,7 @@ class BinaryAttribute(Attribute):
 
 
 
-class IntegerAttribute(Attribute):
+class Integer(Attribute):
 
     def __set__(self, instance, value):
         if not (isinstance(value, int) or (value is None and self.nullable)):
