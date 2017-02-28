@@ -1,26 +1,28 @@
 from . import exp
-from .const import KeyType, ProjectionType, Type
+from .types import KeyType, ProjectionType, AttrType
 
 
 specs = {
     'ProductCatalog': exp.make_table_spec(
         'ProductCatalog',
-        id=('Id', Type.N),
+        id=('Id', AttrType.N),
     ),
     'Forum': exp.make_table_spec(
         'Forum',
-        id=('Name', Type.S),
+        id=('Name', AttrType.S),
     ),
     'Thread': exp.make_table_spec(
         'Thread',
-        id=('ForumName', Type.S),
-        range=('Subject', Type.S),
+        id=('ForumName', AttrType.S),
+        range=('Subject', AttrType.S),
     ),
     'Reply': exp.make_table_spec(
         'Reply',
-        id=('Id', Type.S),
-        range=('ReplyDateTime', Type.S),
-        extra_attrs=[{'AttributeName': 'PostedBy', 'AttributeType': Type.S}],
+        id=('Id', AttrType.S),
+        range=('ReplyDateTime', AttrType.S),
+        extra_attrs=[
+            {'AttributeName': 'PostedBy', 'AttributeType': AttrType.S}
+        ],
         local_secondary_indexes=[{
             'IndexName': 'PostedByIndex',
             'KeySchema': [

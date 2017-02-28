@@ -1,4 +1,4 @@
-from .const import KeyType, StreamViewType, Type
+from .types import KeyType, StreamViewType, AttrType
 
 
 def list_of(validate1):
@@ -14,7 +14,7 @@ def attribute_name(cls, attrib, val):
 
 
 def attribute_type(cls, attrib, val):
-    if val not in (Type.S, Type.N, Type.B):
+    if val not in (AttrType.S, AttrType.N, AttrType.B):
         raise ValueError("'%s' is not a valid attribute type" % (val,))
 
 

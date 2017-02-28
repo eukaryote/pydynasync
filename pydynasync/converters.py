@@ -1,5 +1,5 @@
 import attr
-from .const import ProjectionType
+from .types import ProjectionType
 
 
 def to_boto(obj):

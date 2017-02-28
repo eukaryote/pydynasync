@@ -12,7 +12,7 @@ import boto3
 import attr
 
 from . import converters as C, validators as V
-from .const import KeyType, StreamViewType, Type
+from .types import KeyType, StreamViewType, AttrType
 
 logging.basicConfig()
 
@@ -138,7 +138,7 @@ def make_table_spec(name, *, id=None, range=None, extra_attrs=None,
                     local_secondary_indexes=None,
                     global_secondary_indexes=None):
     if id is None:
-        iname, itype = 'id', Type.N
+        iname, itype = 'id', AttrType.N
     else:
         iname, itype = id
     keys = [Key(AttributeName=iname, KeyType=KeyType.HASH)]

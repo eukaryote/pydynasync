@@ -6,7 +6,7 @@ import pytest
 
 from pydynasync import devguide, exp
 from pydynasync import attributes as A, models as M
-from pydynasync.const import KeyType, ProjectionType, StreamViewType, Type
+from pydynasync.types import KeyType, ProjectionType, StreamViewType, AttrType
 
 from test import AttrTest, IntTest, Person
 

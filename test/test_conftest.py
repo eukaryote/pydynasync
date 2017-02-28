@@ -1,4 +1,4 @@
-from pydynasync.const import KeyType, ProjectionType, Type
+from pydynasync.types import AttrType, KeyType, ProjectionType
 import pydynasync.exp as exp
 
 
@@ -7,7 +7,7 @@ def test_product_catalog_spec(product_catalog_spec):
     assert spec.TableName == 'ProductCatalog'
     assert len(spec.AttributeDefinitions) == 1
     assert len(spec.KeySchema) == 1
-    assert spec.AttributeDefinitions[0].AttributeType == Type.N
+    assert spec.AttributeDefinitions[0].AttributeType == AttrType.N
 
 
 def test_forum_spec(forum_spec):
@@ -15,7 +15,7 @@ def test_forum_spec(forum_spec):
     assert spec.TableName == 'Forum'
     assert len(spec.AttributeDefinitions) == 1
     assert len(spec.KeySchema) == 1
-    assert spec.AttributeDefinitions[0].AttributeType == Type.S
+    assert spec.AttributeDefinitions[0].AttributeType == AttrType.S
 
 
 def test_thread_spec(thread_spec):
@@ -23,24 +23,24 @@ def test_thread_spec(thread_spec):
     assert spec.TableName == 'Thread'
     assert len(spec.AttributeDefinitions) == 2
     assert len(spec.KeySchema) == 2
-    assert spec.AttributeDefinitions[0].AttributeType == Type.S
-    assert spec.AttributeDefinitions[1].AttributeType == Type.S
+    assert spec.AttributeDefinitions[0].AttributeType == AttrType.S
+    assert spec.AttributeDefinitions[1].AttributeType == AttrType.S
 
 
 def test_reply_spec(reply_spec):
     spec = reply_spec
     assert spec.TableName == 'Reply'
     assert spec.AttributeDefinitions == [
-        exp.Attribute('Id', Type.S),
-        exp.Attribute('ReplyDateTime', Type.S),
-        exp.Attribute('PostedBy', Type.S),
+        exp.Attribute('Id', AttrType.S),
+        exp.Attribute('ReplyDateTime', AttrType.S),
+        exp.Attribute('PostedBy', AttrType.S),
     ]
     assert spec.KeySchema == [
         exp.Key('Id', KeyType.HASH),
         exp.Key('ReplyDateTime', KeyType.RANGE),
     ]
-    assert spec.AttributeDefinitions[0].AttributeType == Type.S
-    assert spec.AttributeDefinitions[1].AttributeType == Type.S
+    assert spec.AttributeDefinitions[0].AttributeType == AttrType.S
+    assert spec.AttributeDefinitions[1].AttributeType == AttrType.S
     assert spec.LocalSecondaryIndexes
     hkey, rkey = spec.KeySchema
     assert hkey.KeyType == KeyType.HASH

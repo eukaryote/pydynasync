@@ -2,7 +2,7 @@ import enum
 
 
 @enum.unique
-class Type(enum.Enum):
+class AttrType(enum.Enum):
 
     # Scalar types
     S = 'S'        # String
@@ -17,17 +17,19 @@ class Type(enum.Enum):
 
     # Set types
     SS = 'SS'      # String Set
-    NN = 'NN'      # Number Set
-    BB = 'BB'      # Binary Set
+    NS = 'NS'      # Number Set
+    BS = 'BS'      # Binary Set
 
     def is_scalar_type(self):
-        return self in (Type.S, Type.N, Type.B, Type.BOOL, Type.NULL)
+        return self in (
+            AttrType.S, AttrType.N, AttrType.B, AttrType.BOOL, AttrType.NULL
+        )
 
     def is_document_type(self):
-        return self in (Type.M, Type.L)
+        return self in (AttrType.M, AttrType.L)
 
     def is_set_type(self):
-        return self in (Type.SS, Type.NN, Type.BB)
+        return self in (AttrType.SS, AttrType.NS, AttrType.BS)
 
     def __str__(self):
         return self.value
@@ -39,6 +41,9 @@ class KeyType(enum.Enum):
     HASH = 'HASH'
     RANGE = 'RANGE'
 
+    def __str__(self):
+        return self.value
+
 
 @enum.unique
 class StreamViewType(enum.Enum):
@@ -48,6 +53,9 @@ class StreamViewType(enum.Enum):
     OLD_IMAGE = 'OLD_IMAGE'
     NEW_AND_OLD_IMAGES = 'NEW_AND_OLD_IMAGES'
 
+    def __str__(self):
+        return self.value
+
 
 @enum.unique
 class ProjectionType(enum.Enum):
@@ -55,3 +63,6 @@ class ProjectionType(enum.Enum):
     ALL = 'ALL'
     KEYS_ONLY = 'KEYS_ONLY'
     INCLUDE = 'INCLUDE'
+
+    def __str__(self):
+        return self.value
