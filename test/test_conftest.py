@@ -1,3 +1,5 @@
+import base64
+
 from pydynasync.types import AttrType, KeyType, ProjectionType
 import pydynasync.exp as exp
 
@@ -77,3 +79,109 @@ def test_thread_table(thread_table, client):
 def test_reply_table(reply_table, client):
     t = reply_table
     assert client.describe_table(TableName=t['TableName'])
+
+
+def test_test_table(test_table, client):
+    t = test_table
+    assert client.describe_table(TableName=t['TableName'])
+    import pprint
+
+    result = client.put_item(
+        TableName='Test',
+        Item={
+            'Id': {'N': '1'},
+            'Handiness': {'S': 'most decent'},
+            'Adhoc': {'S': 'and another'},
+        }
+    )
+    print('put_item result:')
+    pprint.pprint(result)
+    print()
+
+    result = client.get_item(
+        TableName='Test',
+        Key={
+            'Id': {'N': '1'},
+            'Handiness': {'S': 'most decent'},
+        },
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('get_item result:')
+    pprint.pprint(result)
+    print()
+
+    result = client.get_item(
+        TableName='Test',
+        Key={
+            'Id': {'N': '1'},
+            'Handiness': {'S': 'most decent'},
+        },
+        ProjectionExpression="Id,Handiness",
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('get_item ProjectionExpression result:')
+    pprint.pprint(result)
+    print()
+
+    result = client.delete_item(
+        TableName='Test',
+        Key={
+            'Id': {'N': '1'},
+            'Handiness': {'S': 'most decent'},
+        },
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('delete_item result:')
+    pprint.pprint(result)
+    print()
+
+    result = client.put_item(
+        TableName='Test',
+        Item={
+            'Id': {'N': '2'},
+            'Handiness': {'S': '2'},
+            'AND': {'S': 'reserved'},
+        },
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('put_item result:')
+    pprint.pprint(result)
+    print()
+
+    result = client.get_item(
+        TableName='Test',
+        Key={
+            'Id': {'N': '2'},
+            'Handiness': {'S': '2'},
+        },
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('get_item (AND attr):')
+    pprint.pprint(result)
+    print()
+
+    result = client.get_item(
+        TableName='Test',
+        Key={
+            'Id': {'N': '1'},
+            'Handiness': {'S': '2'},
+        },
+        ProjectionExpression='Id,Handiness',
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('get_item ProjectionExpression:')
+    pprint.pprint(result)
+    print()
+
+    result = client.delete_item(
+        TableName='Test',
+        Key={
+            'Id': {'N': '2'},
+            'Handiness': {'S': '2'},
+        },
+        ReturnConsumedCapacity='TOTAL',
+    )
+    print('delete_item result:')
+    pprint.pprint(result)
+    print()
+    # assert False

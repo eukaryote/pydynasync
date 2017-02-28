@@ -8,28 +8,28 @@ from pydynasync import devguide, exp
 from pydynasync import attributes as A, models as M
 from pydynasync.types import KeyType, ProjectionType, StreamViewType, AttrType
 
-from test import AttrTest, IntTest, Person
+from test import StrTest, IntTest, Person
 
 
 @pytest.fixture
-def attr1():
-    attr = AttrTest()
-    attr.required = 'required-value'
+def str1():
+    m = StrTest()
+    m.required = 'required-value'
     return types.SimpleNamespace(
-        attr=attr,
-        required=attr.required,
+        model=m,
+        required=m.required,
         members=('required', 'optional'),
     )
 
 
 @pytest.fixture
 def intattr1():
-    attr = IntTest()
-    attr.required = 42
-    M.ModelMeta.clear_changed(attr)
+    m = IntTest()
+    m.required = 42
+    M.ModelMeta.clear_changed(m)
     return types.SimpleNamespace(
-        attr=attr,
-        required=attr.required,
+        model=m,
+        required=m.required,
         members=('required', 'optional'),
     )
 
@@ -70,6 +70,11 @@ def reply_spec():
 
 
 @pytest.fixture
+def test_spec():
+    return devguide.specs['Test']
+
+
+@pytest.fixture
 def product_catalog_table(product_catalog_spec, client):
     yield exp.create_table(client, product_catalog_spec)
     client.delete_table(TableName=product_catalog_spec.TableName)
@@ -91,6 +96,12 @@ def thread_table(thread_spec, client):
 def reply_table(reply_spec, client):
     yield exp.create_table(client, reply_spec)
     client.delete_table(TableName=reply_spec.TableName)
+
+
+@pytest.fixture
+def test_table(test_spec, client):
+    yield exp.create_table(client, test_spec)
+    client.delete_table(TableName=test_spec.TableName)
 
 
 @pytest.fixture

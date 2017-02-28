@@ -8,7 +8,7 @@ import pytest
 import pydynasync.models as M
 import pydynasync.attributes as A
 
-from test import AttrTest, IntTest, Person
+from test import StrTest, IntTest, Person
 
 
 def test_changes_none(person1):
@@ -109,7 +109,7 @@ def test_change_undo_multiple(person1):
 def test_model_ddb_name_provided():
     name = 'myddbname'
     class ModelWithDDBName(M.Model, ddb_name=name):
-        attr = A.Attribute()
+        attr = A.String()
 
 
     assert ModelWithDDBName._ddb_name == name
@@ -118,8 +118,8 @@ def test_model_ddb_name_provided():
 def test_model_init_keyword_args():
 
     class MyModel(M.Model):
-        attr1 = A.Attribute()
-        attr2 = A.Attribute()
+        attr1 = A.String()
+        attr2 = A.String()
 
     m = MyModel(attr1='1', attr2='2')
     assert m.attr1 == '1'
@@ -134,8 +134,8 @@ def test_model_key_when_not_weakref_call():
 
     class P(M.Model):
 
-        attr1 = A.Attribute()
-        attr2 = A.Attribute()
+        attr1 = A.String()
+        attr2 = A.String()
 
     p = P()
     assert p._key() == (None, None)
@@ -155,7 +155,7 @@ def test_model_key_when_weakref_call():
 
     class P(M.Model):
 
-        attr1 = A.Attribute()
+        attr1 = A.String()
 
     p1, p2 = P(), P()
 
@@ -167,7 +167,7 @@ def test_model_key_when_weakref_call():
 
 
 def test_model_equality_empty():
-    a1, a2 = AttrTest(), AttrTest()
+    a1, a2 = StrTest(), StrTest()
     assert a1 == a2
     assert a2 == a1
 
@@ -206,7 +206,7 @@ def test_model_equality_when_weakref_call():
 
     class P(M.Model):
 
-        attr1 = A.Attribute()
+        attr1 = A.String()
 
     p1, p2 = P(), P()
 
@@ -228,11 +228,11 @@ def test_garbage_collection_of_model():
 
     class P1(M.Model):
 
-        attr = A.Attribute()
+        attr = A.String()
 
     class P2(M.Model):
 
-        attr = A.Attribute()
+        attr = A.String()
 
 
     ref1 = weakref.ref(P1)

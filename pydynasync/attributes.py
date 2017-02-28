@@ -1,10 +1,13 @@
+import abc
+import collections.abc
 import decimal
 import weakref
 
-from . import ddb, models, util
+from . import ddb, models, types, util
+from .serialization import pack_scalar, unpack_scalar
 
 
-class Attribute:
+class Attribute(metaclass=abc.ABCMeta):
 
     def __init__(self, *, nullable=False, ddb_name=None):
         self.__name = None
@@ -84,14 +87,79 @@ class Attribute:
         self.__index = indexes.get(owner, 0)
         indexes[owner] = self.__index + 1
 
-    def serialize(self, value):
-        return value if isinstance(value, str) else str(value)
-
-    def deserialize(self, value):
+    @abc.abstractmethod
+    def _check(self, value):
+        """
+        Check the value, returning value to use on success or raising
+        TypeError or ValueError on failure.
+        """
+        if value is None and not self.nullable:
+            raise TypeError(f"'{self.name}' attribute is not nullable")
         return value
+
+    @abc.abstractmethod
+    def serialize(self, value):
+        """
+        Serialize a valid value for this attribute type to a DynamoDB dict.
+        """
+
+    @abc.abstractmethod
+    def deserialize(self, value):
+        """
+        Deserialize a DynamoDB dict to an attribute value of this attribute.
+        """
 
 
 Attribute._indexes = weakref.WeakKeyDictionary()
+
+#TODO: this serialization/deserialization stuff should be
+# usable by these attributes (high-level ORM) as well as
+# by the calls like AttrType.S(Name="Jos K") (low-level API).
+
+class String(Attribute):
+
+    def _check(self, value):
+        if not (isinstance(value, str) or (value is None and self.nullable)):
+            raise TypeError(f'String attribute requires a str value, not '
+                            f'{type(value)}')
+        return value
+
+    def serialize(self, value):
+        if value is None and self.nullable:
+            return None
+        return pack_scalar(types.AttrType.S, self.ddb_name, self._check(value))
+
+    def deserialize(self, value):
+        if value is None and self.nullable:
+            return None
+        stype, sname, svalue = unpack_scalar(value)
+        if stype is not types.AttrType.S:
+            raise TypeError(value)
+        if sname != self.ddb_name:
+            raise ValueError(f"name {sname} in value does not match ddb_name "
+                             f"{self.ddb_name}")
+        return svalue
+
+
+
+class StringSet(Attribute):
+
+    def _check(self, value):
+        if value is None and self.nullable:
+            return None
+        elif not (isinstance(value, set) and
+                  all(isinstance(v, str) for v in value)):
+            raise TypeError(f'StringSet attribute requires a set of str')
+        return value
+
+    def serialize(self, value):
+        value = self._check(value)
+        if value is None:
+            return None
+        return tuple(map(str, value))
+
+    def deserialize(self, value):
+        pass
 
 
 class Binary(Attribute):
@@ -101,11 +169,26 @@ class Binary(Attribute):
             msg = f'BinaryAttribute requires bytes value, not {type(value)}'
             raise TypeError(msg)
 
+    def _check(self, value):
+        if value is None and self.nullable:
+            return None
+        elif not isinstance(value, bytes):
+            raise TypeError(value)
+        return value
+
     def serialize(self, value):
-        return super().serialize(base64.b64encode(value))
+        value = self._check(value)
+        if value is None:
+            return None
+        return pack_scalar(types.AttrType.B, self.ddb_name, value)
 
     def deserialize(self, value):
-        return super().deserialize(base64.b64decode(value))
+        stype, sname, svalue = unpack_scalar(value)
+        if stype is not Attr.B:
+            raise ValueError(stype)
+        elif sname != self.ddb_name:
+            raise ValueError(sname)
+        return svalue
 
 
 class Number(Attribute):
@@ -199,4 +282,34 @@ class Boolean(Attribute):
                    f"not {value}")
             raise ValueError(msg)
         return result
+
+
+class List(Attribute):
+
+    def _check(self, value):
+        if not (isinstance(value, (list, tuple)) or
+                (value is None and self.nullable)):
+            raise TypeError(f'{value} should be a list or tuple')
+        return value
+
+    def __set__(self, instance, value):
+        super().__set__(instance, self._check(value))
+
+    def serialize(self, value):
+        value = self._check(value)
+        return None if value is None else value
+
+
+class Map(Attribute):
+
+    def _check(self, value):
+        if not isinstance(value, collections.abc.Mapping):
+            raise TypeError(f'{value} should be a mapping')
+
+    def __set__(self, instance, value):
+        super().__set__(instance, self._check(value))
+
+    def serialize(self, value):
+        value = self._check(value)
+        return None if value is None else value
 

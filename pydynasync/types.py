@@ -1,8 +1,22 @@
+import decimal
 import enum
+from .serialization import pack_scalar, unpack_scalar
+
+
+class EnumBase:
+
+    @classmethod
+    def from_value(cls, value):
+        """Get enum by value."""
+        return cls.__members__[value]
+
+    def __str__(self):
+        """Use value as str representation, but not for repr."""
+        return self.value
 
 
 @enum.unique
-class AttrType(enum.Enum):
+class AttrType(EnumBase, enum.Enum):
 
     # Scalar types
     S = 'S'        # String
@@ -31,38 +45,58 @@ class AttrType(enum.Enum):
     def is_set_type(self):
         return self in (AttrType.SS, AttrType.NS, AttrType.BS)
 
-    def __str__(self):
-        return self.value
+    def __call__(self, **kwargs):
+        if not self.is_scalar_type():
+            # TODO: implement for non-scalar types
+            raise NotImplementedError()
+        d = {}
+        for k, v in kwargs.items():
+            d.update(pack_scalar(self, k, v))
+        return d
 
+# AttrType.serializers = {
+#     'S': str,
+#     'N': lambda v: decimal.Decimal(str(v)),
+#     'B': base64.b64encode,
+
+# }
 
 @enum.unique
-class KeyType(enum.Enum):
+class KeyType(EnumBase, enum.Enum):
 
     HASH = 'HASH'
     RANGE = 'RANGE'
 
-    def __str__(self):
-        return self.value
-
 
 @enum.unique
-class StreamViewType(enum.Enum):
+class StreamViewType(EnumBase, enum.Enum):
 
     KEYS_ONLY = 'KEYS_ONLY'
     NEW_IMAGE = 'NEW_IMAGE'
     OLD_IMAGE = 'OLD_IMAGE'
     NEW_AND_OLD_IMAGES = 'NEW_AND_OLD_IMAGES'
 
-    def __str__(self):
-        return self.value
-
 
 @enum.unique
-class ProjectionType(enum.Enum):
+class ProjectionType(EnumBase, enum.Enum):
 
     ALL = 'ALL'
     KEYS_ONLY = 'KEYS_ONLY'
     INCLUDE = 'INCLUDE'
 
-    def __str__(self):
-        return self.value
+
+@enum.unique
+class ConsumedCapacity(EnumBase, enum.Enum):
+
+    INDEXES = 'INDEXES'
+    TOTAL = 'TOTAL'
+    NONE = 'NONE'
+
+@enum.unique
+class ReturnValues(EnumBase, enum.Enum):
+
+    NONE = 'NONE'
+    ALL_OLD = 'ALL_OLD'
+    UPDATED_OLD = 'UPDATED_OLD'
+    ALL_NEW = 'ALL_NEW'
+    UPDATED_NEW = 'UPDATED_NEW'

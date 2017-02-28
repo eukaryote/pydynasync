@@ -2,10 +2,10 @@ from pydynasync import attributes as A, models as M
 
 # some simple test models:
 
-class AttrTest(M.Model):
+class StrTest(M.Model):
 
-    required = A.Attribute()
-    optional = A.Attribute(nullable=True)
+    required = A.String()
+    optional = A.String(nullable=True)
 
 
 class NumTest(M.Model):
@@ -34,6 +34,6 @@ class BoolTest(M.Model):
 
 class Person(M.Model):
 
-    name_ = A.Attribute()
-    nickname = A.Attribute(nullable=True)
+    name_ = A.String()
+    nickname = A.String(nullable=True)
     age = A.Integer()

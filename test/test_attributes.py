@@ -1,48 +1,61 @@
+import base64
 import decimal
 import types
 
 import pytest
 
 from pydynasync import attributes as A, ddb, models as M
+from pydynasync import types as T
 
 from test import BoolTest, DecTest, NumTest
 
 
-def test_attr_get(attr1):
-    assert attr1.attr.required == attr1.required
+def test_str_get(str1):
+    assert str1.model.required == str1.required
 
 
-def test_attr_set(attr1):
-    new_value = attr1.attr.required + 'X'
-    attr1.attr.required = new_value
-    assert attr1.attr.required == new_value
+def test_str_set(str1):
+    new_value = str1.model.required + 'X'
+    str1.model.required = new_value
+    assert str1.model.required == new_value
 
 
-def test_attr_del_nullable(attr1):
-    a = attr1.attr
-    a.optional = 'foo'
-    assert a.optional == 'foo'
-    del a.optional
-    assert a.optional is None
+def test_str_del_nullable(str1):
+    str1.model.optional = 'foo'
+    assert str1.model.optional == 'foo'
+    del str1.model.optional
+    assert str1.model.optional is None
 
 
-def test_attr_del_not_nullable(attr1):
+def test_str_del_not_nullable(str1):
     with pytest.raises(TypeError) as e:
-        del attr1.attr.required
+        del str1.model.required
     assert str(e.value) == 'required may not be null'
 
 
-@pytest.mark.parametrize('value', [42, None, 'asdf'])
-def test_attr_serialization(attr1, value):
-    assert type(attr1.attr).required.serialize(value) == str(value)
+@pytest.mark.parametrize('value', ['42', 'asdf'])
+def test_string_serialization_required(str1, value):
+    assert type(str1.model).required.serialize(value) == {
+        'required': {'S': value}
+    }
 
+
+@pytest.mark.parametrize('value', ['42', 'asdf', None])
+def test_string_serialization_optional(str1, value):
+    result = type(str1.model).optional.serialize(value)
+    expected = None if value is None else {
+        'optional': {'S': value}
+    }
+
+
+# TODO: serialization/deserialization tests for all types
 
 def test_intattr_required_get(intattr1):
-    assert intattr1.attr.required == intattr1.required
+    assert intattr1.model.required == intattr1.required
 
 
 def test_intattr_required_set(intattr1):
-    a = intattr1.attr
+    a = intattr1.model
     new_value = a.required + 1
     a.required = new_value
     assert a.required == new_value
@@ -54,7 +67,7 @@ def test_intattr_required_set(intattr1):
 
 
 def test_intattr_optional_set(intattr1):
-    a = intattr1.attr
+    a = intattr1.model
 
     # can set to int
     assert a.optional != a.required
@@ -77,7 +90,7 @@ def test_attribute_name_not_reserved_word():
 
         class P(M.Model):
 
-            exists = A.Attribute()
+            exists = A.String()
 
     cause = e.value.__cause__
     assert isinstance(cause, ValueError)
@@ -90,14 +103,14 @@ def test_attribute_name_ddb_name():
 
     class P1(M.Model):
 
-        name = A.Attribute(ddb_name='name_')
+        name = A.String(ddb_name='name_')
 
 
     assert P1.name.ddb_name == 'name_'
 
     class P2(M.Model):
 
-        name_ = A.Attribute()
+        name_ = A.String()
 
     assert P2.name_.ddb_name == 'name_'
 
@@ -200,3 +213,22 @@ def test_boolean_check_optional_wrong_types(value):
 @pytest.mark.parametrize('value', [True, False, None])
 def test_boolean_check_optional_valid(value):
     assert BoolTest.optional._check(value) is value
+
+
+def test_attr_type_string():
+    expected = {
+        'FirstName': {'S': 'Jos'},
+        'LastName': {'S': 'Knecht'},
+    }
+    actual = T.AttrType.S(FirstName='Jos', LastName='Knecht')
+    assert expected == actual
+    assert T.AttrType.S() == {}
+
+
+def test_attr_type_binary():
+    data = b'The Quick Brown Fox'
+    expected = {
+        'Title': {'B': base64.b64encode(data)}
+    }
+    actual = T.AttrType.B(Title=data)
+    assert expected == actual
