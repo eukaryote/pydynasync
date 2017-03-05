@@ -75,6 +75,11 @@ def test_spec():
 
 
 @pytest.fixture
+def test1_spec():
+    return devguide.specs['Test1']
+
+
+@pytest.fixture
 def product_catalog_table(product_catalog_spec, client):
     yield exp.create_table(client, product_catalog_spec)
     client.delete_table(TableName=product_catalog_spec.TableName)
@@ -102,6 +107,12 @@ def reply_table(reply_spec, client):
 def test_table(test_spec, client):
     yield exp.create_table(client, test_spec)
     client.delete_table(TableName=test_spec.TableName)
+
+
+@pytest.fixture
+def test1_table(test1_spec, client):
+    yield exp.create_table(client, test1_spec)
+    client.delete_table(TableName=test1_spec.TableName)
 
 
 @pytest.fixture

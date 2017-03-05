@@ -39,4 +39,8 @@ specs = {
         id=('Id', AttrType.N),
         range=('Handiness', AttrType.S),
     ),
+    'Test1': exp.make_table_spec(
+        'Test1',
+        id=('Id', AttrType.N),
+    ),
 }
