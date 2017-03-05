@@ -7,7 +7,75 @@ import pytest
 from pydynasync import attributes as A, ddb, models as M
 from pydynasync import types as T
 
-from test import BoolTest, DecTest, NumTest
+from test import (
+    BooleanTest, DecimalTest, NullTest, NumberTest
+)
+
+
+def test_attribute_type():
+
+    with pytest.raises(ValueError) as e:
+
+        class MyModel(M.Model):
+            attr = A.Attribute()
+
+    assert str(e.value).startswith("`attr_type` is required if no")
+
+    attr_type = T.AttrType.B
+
+    class MyModel1(M.Model):
+
+        attr = A.Attribute(attr_type=attr_type)
+
+
+    assert MyModel1.attr.type is attr_type
+
+    class CustomAttribute(A.Attribute):
+
+        TYPE = T.AttrType.NS
+
+    class MyModel2(M.Model):
+
+        attr1 = CustomAttribute()
+        attr2 = CustomAttribute(attr_type=attr_type)
+
+    assert MyModel2.attr1.type is CustomAttribute.TYPE
+    assert MyModel2.attr2.type is attr_type
+
+
+def test_attribute_nullable():
+
+    class MyModel(M.Model):
+
+        attr1 = A.Attribute(attr_type=T.AttrType.S)
+        attr2 = A.Attribute(attr_type=T.AttrType.S, nullable=True)
+        attr3 = A.Attribute(attr_type=T.AttrType.S, nullable=False)
+
+    assert MyModel.attr1.nullable is False
+    assert MyModel.attr2.nullable is True
+    assert MyModel.attr3.nullable is False
+
+
+def test_attribute_ddb_name():
+
+    class MyModel(M.Model):
+
+        attr1 = A.Attribute(attr_type=T.AttrType.S)
+        attr2 = A.Attribute(attr_type=T.AttrType.S, ddb_name='myddbname')
+
+    assert MyModel.attr1.ddb_name == 'attr1'
+    assert MyModel.attr2.ddb_name == 'myddbname'
+
+
+def test_attribute_name():
+
+    class MyModel(M.Model):
+
+        attr1 = A.Attribute(attr_type=T.AttrType.S)
+        attr2 = A.Attribute(attr_type=T.AttrType.S, ddb_name='myddbname')
+
+    assert MyModel.attr1.name == 'attr1'
+    assert MyModel.attr2.name == 'attr2'
 
 
 def test_str_get(str1):
@@ -62,8 +130,7 @@ def test_intattr_required_set(intattr1):
 
     with pytest.raises(TypeError) as e:
         a.required = '42'
-    # TODO: improve error message
-    assert str(e.value) == '42 should be an int'
+    assert str(e.value) == "value '42' should be of type: int"
 
 
 def test_intattr_optional_set(intattr1):
@@ -80,7 +147,7 @@ def test_intattr_optional_set(intattr1):
     # can't set to non-int/none
     with pytest.raises(TypeError) as e:
         a.optional = '42'
-    assert str(e.value) == '42 should be an int'
+    assert str(e.value) == "value '42' should be of type: int"
 
 
 def test_attribute_name_not_reserved_word():
@@ -136,83 +203,84 @@ def test_number_range():
 
 @pytest.mark.parametrize('value', [-1, 0, 1E75])
 def test_number_check_required_valid(value):
-    assert NumTest.required._check(value) is value
+    assert NumberTest.required._check(value) is value
 
 
 @pytest.mark.parametrize('value', [-1, 0, 1E75, None])
 def test_number_check_optional_valid(value):
-    assert NumTest.optional._check(value) is value
+    assert NumberTest.optional._check(value) is value
 
 
 @pytest.mark.parametrize('value,result', [
-    (1, '1'),
-    (0, '0'),
-    (1.1, '1.1'),
+    (1, {'required': {'N': '1'}}),
+    (0, {'required': {'N': '0'}}),
+    (decimal.Decimal('1.1'), {'required': {'N': '1.1'}}),
 
 ])
-def test_number_serialization_required(value, result):
-    assert NumTest.required.serialize(value) == result
-    assert NumTest.required.deserialize(result) == value
-
-
-def test_number_serialization_optional():
-    assert NumTest.optional.serialize(None) is None
-    assert NumTest.optional.deserialize(None) is None
-    assert NumTest.optional.serialize(1.1) == '1.1'
-    assert NumTest.optional.deserialize('1.1') == 1.1
+def test_number_serialize_required(value, result):
+    assert NumberTest.required.serialize(value) == result
 
 
 @pytest.mark.parametrize('value,result', [
-    (1.1, decimal.Decimal('1.1')),
+    (1, {'required': {'N': '1'}}),
+    (decimal.Decimal('2.2'), {'required': {'N': '2.2'}}),
+    (0, {'required': {'N': '0'}}),
+])
+def test_number_deserialize_required(value, result):
+    assert NumberTest.required.deserialize(result) == value
+
+
+@pytest.mark.parametrize('value,result', [
+    (1.1, 1.1),
     (decimal.Decimal('1.1'), decimal.Decimal('1.1'))
 ])
 def test_decimal_check_required_value(value, result):
-    assert DecTest.required._check(value) == result
+    assert DecimalTest.required._check(value) == result
 
 
 @pytest.mark.parametrize('value,result', [
-    (1.1, decimal.Decimal('1.1')),
+    (1.1, 1.1),
     (decimal.Decimal('1.1'), decimal.Decimal('1.1')),
     (None, None),
 ])
 def test_decimal_check_optional_value(value, result):
-    assert DecTest.optional._check(value) == result
+    assert DecimalTest.optional._check(value) == result
 
 
 @pytest.mark.parametrize('value,result', [(True, 'true'), (False, 'false')])
 def test_boolean_serialization_required(value, result):
-    assert BoolTest.required.serialize(value) == result
-    assert BoolTest.required.deserialize(result) == value
+    assert BooleanTest.required.serialize(value) == result
+    assert BooleanTest.required.deserialize(result) == value
 
 
 @pytest.mark.parametrize('value,result', [(True, 'true'), (False, 'false')])
 def test_boolean_serialization_optional(value, result):
-    assert BoolTest.optional.serialize(value) == result
-    assert BoolTest.optional.deserialize(result) == value
+    assert BooleanTest.optional.serialize(value) == result
+    assert BooleanTest.optional.deserialize(result) == value
 
 
 @pytest.mark.parametrize('value', [type, 'foo', None])
 def test_boolean_check_required_wrong_types(value):
     with pytest.raises(TypeError) as e:
-        BoolTest.required._check(value)
+        BooleanTest.required._check(value)
     assert str(e.value) == f'{value} should be a bool'
 
 
 @pytest.mark.parametrize('value', [True, False])
 def test_boolean_check_required_valid(value):
-    assert BoolTest.required._check(value) is value
+    assert BooleanTest.required._check(value) is value
 
 
 @pytest.mark.parametrize('value', [type, 'foo', 0])
 def test_boolean_check_optional_wrong_types(value):
     with pytest.raises(TypeError) as e:
-        BoolTest.optional._check(value)
+        BooleanTest.optional._check(value)
     assert str(e.value) == f'{value} should be a bool'
 
 
 @pytest.mark.parametrize('value', [True, False, None])
 def test_boolean_check_optional_valid(value):
-    assert BoolTest.optional._check(value) is value
+    assert BooleanTest.optional._check(value) is value
 
 
 def test_attr_type_string():
@@ -232,3 +300,67 @@ def test_attr_type_binary():
     }
     actual = T.AttrType.B(Title=data)
     assert expected == actual
+
+
+def test_null_check_required_valid():
+    assert NullTest.required._check(True) is True
+
+
+@pytest.mark.parametrize('value', [False, None, 1, '2'])
+def test_null_check_required_invalid(value):
+    with pytest.raises(TypeError) as e:
+        NullTest.required._check(False)
+    assert 'should be True or None' in str(e.value)
+
+
+@pytest.mark.parametrize('value', [True, None])
+def test_null_check_optional_valid(value):
+    assert NullTest.optional._check(value) is value
+
+
+@pytest.mark.parametrize('value', [False, None, 1, '2'])
+def test_null_check_optional_invalid(value):
+    with pytest.raises(TypeError) as e:
+        NullTest.optional._check(False)
+    assert 'should be True or None' in str(e.value)
+
+
+@pytest.mark.xfail
+def test_null_serialization_required():
+    assert NullTest.required.serialize(True) == {
+        'required': {
+            'NULL': True
+        }
+    }
+
+
+def test_attr_type_null():
+    assert T.AttrType.NULL() == {}
+
+    assert T.AttrType.NULL(a=True) == {
+        'a': {
+            'NULL': True,
+        }
+    }
+
+    assert T.AttrType.NULL(a=True, b=True) == {
+        'a': {
+            'NULL': True,
+        },
+        'b': {
+            'NULL': True,
+        },
+    }
+
+
+def test_stringset_serialization():
+    result = T.AttrType.SS.serialize('foo', {'a', 'b'})
+    result['foo']['SS'].sort()
+    assert result == {
+        'foo': {
+            'SS': ['a', 'b']
+        }
+    }
+
+    result2 = T.AttrType.SS.deserialize('foo', result)
+    assert result2 == {'a', 'b'}

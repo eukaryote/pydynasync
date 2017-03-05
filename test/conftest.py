@@ -8,12 +8,12 @@ from pydynasync import devguide, exp
 from pydynasync import attributes as A, models as M
 from pydynasync.types import KeyType, ProjectionType, StreamViewType, AttrType
 
-from test import StrTest, IntTest, Person
+from test import StringTest, IntegerTest, Person
 
 
 @pytest.fixture
 def str1():
-    m = StrTest()
+    m = StringTest()
     m.required = 'required-value'
     return types.SimpleNamespace(
         model=m,
@@ -24,7 +24,7 @@ def str1():
 
 @pytest.fixture
 def intattr1():
-    m = IntTest()
+    m = IntegerTest()
     m.required = 42
     M.ModelMeta.clear_changed(m)
     return types.SimpleNamespace(

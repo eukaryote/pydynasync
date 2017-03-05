@@ -8,7 +8,7 @@ import pytest
 import pydynasync.models as M
 import pydynasync.attributes as A
 
-from test import StrTest, IntTest, Person
+from test import StringTest, IntegerTest, Person
 
 
 def test_changes_none(person1):
@@ -167,16 +167,16 @@ def test_model_key_when_weakref_call():
 
 
 def test_model_equality_empty():
-    a1, a2 = StrTest(), StrTest()
+    a1, a2 = StringTest(), StringTest()
     assert a1 == a2
     assert a2 == a1
 
-    i1 = IntTest()
+    i1 = IntegerTest()
     assert a1._key() == i1._key()
     assert a1 != i1
     assert i1 != a1
 
-    a1.required = 42
+    a1.required = '42'
     i1.required = 42
     assert a1 != i1
     assert i1 != a1

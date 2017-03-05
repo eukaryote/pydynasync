@@ -167,7 +167,7 @@ def test_attrtype_null_call():
         }
     }
 
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(TypeError) as e:
         T.AttrType.NULL(a=False)
 
 
@@ -249,7 +249,9 @@ def test_attrtype_binaryset_call():
     (T.AttrType.M, {'foobar': {'S': 'myfoobar'},
                     'qux': {'N': '42'},
                     'pvit': {'NS': ['1', '2', '3']}}),
-
+    (T.AttrType.M, {'top':
+                     {'M': {'middle':
+                             {'M': {'bottom': {'S': 'mybottom'}}}}}}),
 ])
 def test_attrtype_ddb_ops(client, test1_table, test1_spec, attr_type, value):
     tablename = test1_spec.TableName

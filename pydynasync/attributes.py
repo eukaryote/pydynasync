@@ -4,12 +4,26 @@ import decimal
 import weakref
 
 from . import ddb, models, types, util
-from .serialization import pack_scalar, unpack_scalar
+
+
+def check_number_range(value):
+    if not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
+        raise ValueError(f'{value} is outside permitted numeric range')
 
 
 class Attribute(metaclass=abc.ABCMeta):
 
-    def __init__(self, *, nullable=False, ddb_name=None):
+    # The types.AttrType value for this attribute, which if set by
+    # a subclass will be used as the default when no `attr_type`
+    # is provided to `__init__`.
+    TYPE = None
+
+    def __init__(self, *, nullable=False, ddb_name=None, attr_type=None):
+        self.__type = attr_type or self.TYPE
+        if not isinstance(self.__type, types.AttrType):
+            msg = ("`attr_type` is required if no default `TYPE` is "
+                   "set for class, and it must be an AttrType instance")
+            raise ValueError(msg)
         self.__name = None
         self.__owner = None
         self.__index = None
@@ -17,6 +31,10 @@ class Attribute(metaclass=abc.ABCMeta):
         self.__ddb_name = ddb_name
         self.values = weakref.WeakKeyDictionary()
         self.original = weakref.WeakKeyDictionary()
+
+    @property
+    def type(self):
+        return self.__type
 
     @property
     def nullable(self):
@@ -45,9 +63,10 @@ class Attribute(metaclass=abc.ABCMeta):
         return val if val is not util.NOTSET else None
 
     def __set__(self, instance, value):
-        if value is None:
-            if not self.nullable:
-                raise TypeError(f'{self.__name} may not be null')
+        value = self._check(value)
+        # if value is None:
+        #     if not self.nullable:
+        #         raise TypeError(f'{self.__name} may not be null')
 
         if self.values.get(instance, util.NOTFOUND) == value:
             return
@@ -87,27 +106,36 @@ class Attribute(metaclass=abc.ABCMeta):
         self.__index = indexes.get(owner, 0)
         indexes[owner] = self.__index + 1
 
-    @abc.abstractmethod
     def _check(self, value):
         """
         Check the value, returning value to use on success or raising
         TypeError or ValueError on failure.
+
+        The default implementation just returns the value if it's not
+        None or if it is None and the attribute is nullable, raising
+        a TypeError if it is None and not nullable.
+
+        Subclasses should call this to get the null check and then
+        do whatever additional checks may be needed
         """
         if value is None and not self.nullable:
             raise TypeError(f"'{self.name}' attribute is not nullable")
         return value
 
-    @abc.abstractmethod
     def serialize(self, value):
         """
         Serialize a valid value for this attribute type to a DynamoDB dict.
         """
+        value = self._check(value)
+        if value is not None:
+            value = self.__type.serialize(self.ddb_name, value)
+        return value
 
-    @abc.abstractmethod
     def deserialize(self, value):
         """
         Deserialize a DynamoDB dict to an attribute value of this attribute.
         """
+        return self.__type.deserialize(self.ddb_name, value)
 
 
 Attribute._indexes = weakref.WeakKeyDictionary()
@@ -118,51 +146,52 @@ Attribute._indexes = weakref.WeakKeyDictionary()
 
 class String(Attribute):
 
+    """
+    Attribute that allows str values, and optionally None (if `nullable).
+    """
+
+    TYPE = types.AttrType.S
+
     def _check(self, value):
-        if not (isinstance(value, str) or (value is None and self.nullable)):
+        value = super()._check(value)
+        if value is not None and not isinstance(value, str):
             raise TypeError(f'String attribute requires a str value, not '
                             f'{type(value)}')
         return value
 
-    def serialize(self, value):
-        if value is None and self.nullable:
-            return None
-        return pack_scalar(types.AttrType.S, self.ddb_name, self._check(value))
-
-    def deserialize(self, value):
-        if value is None and self.nullable:
-            return None
-        stype, sname, svalue = unpack_scalar(value)
-        if stype is not types.AttrType.S:
-            raise TypeError(value)
-        if sname != self.ddb_name:
-            raise ValueError(f"name {sname} in value does not match ddb_name "
-                             f"{self.ddb_name}")
-        return svalue
-
-
 
 class StringSet(Attribute):
 
+    """
+    Attribute that allows a set of strings, and optionally None (if `nullable).
+    """
+
+    TYPE = types.AttrType.SS
+
     def _check(self, value):
-        if value is None and self.nullable:
-            return None
-        elif not (isinstance(value, set) and
-                  all(isinstance(v, str) for v in value)):
+        value = super()._check(value)
+        if value is not None and not (isinstance(value, set) and
+                                      all(isinstance(v, str) for v in value)):
             raise TypeError(f'StringSet attribute requires a set of str')
         return value
 
     def serialize(self, value):
         value = self._check(value)
-        if value is None:
-            return None
-        return tuple(map(str, value))
+        if value is not None:
+            value = types.AttrType.SS(**{self.ddb_name: list(value)})
+        return value
 
     def deserialize(self, value):
-        pass
+        return set(value[self.ddb_name][type.AttrType.SS.value])
 
 
 class Binary(Attribute):
+
+    """
+    Attribute that allows bytes values, and optionally None (if `nullable).
+    """
+
+    TYPE = types.AttrType.B
 
     def __set__(self, instance, value):
         if not (isinstance(value, bytes) or (value is None and self.nullable)):
@@ -176,90 +205,59 @@ class Binary(Attribute):
             raise TypeError(value)
         return value
 
-    def serialize(self, value):
-        value = self._check(value)
-        if value is None:
-            return None
-        return pack_scalar(types.AttrType.B, self.ddb_name, value)
-
-    def deserialize(self, value):
-        stype, sname, svalue = unpack_scalar(value)
-        if stype is not Attr.B:
-            raise ValueError(stype)
-        elif sname != self.ddb_name:
-            raise ValueError(sname)
-        return svalue
-
 
 class Number(Attribute):
 
+    """
+    Base number type, which allows int, float or decimal.Decimal values.
+
+    See also `Integer` and `Decimal` to constrain the type to just integral
+    or decimal values.
+    """
+
+    TYPE = types.AttrType.N
+
+    allowed_number_types = (int, float, decimal.Decimal)
+
     def _check(self, value):
-        if value is None and self.nullable:
-            return None
-
-        if not isinstance(value, (int, float, decimal.Decimal)):
-            msg = f'{value} should be an int, float, or decimal.Decimal'
-            raise TypeError(msg)
-        elif not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
-            raise ValueError(f'{value} is outside permitted numeric range')
+        value = super()._check(value)
+        if value is not None:
+            if not isinstance(value, self.allowed_number_types):
+                exp = ', '.join(t.__name__ for t in self.allowed_number_types)
+                msg = f"value '{value}' should be of type: {exp}"
+                raise TypeError(msg)
+            elif not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
+                raise ValueError(f'{value} is outside permitted numeric range')
         return value
-
-    def __set__(self, instance, value):
-        super().__set__(instance, self._check(value))
-
-    def serialize(self, value):
-        value = self._check(value)
-        return None if value is None else str(value)
-
-    def deserialize(self, value):
-        if self.nullable and value is None:
-            return None
-        try:
-            return int(value)
-        except ValueError:
-            return float(value)
 
 
 class Integer(Number):
 
-    def _check(self, value):
-        if value is None and self.nullable:
-            return value
-        if not isinstance(value, int):
-            raise TypeError(f'{value} should be an int')
-        return super()._check(value)
+    """
+    Attribute that allows integer values, and optionally None (if `nullable`).
+    """
 
-    def deserialize(self, value):
-        if self.nullable and value is None:
-            return None
-        return int(value)
+    allowed_number_types = (int,)
 
 
 class Decimal(Number):
 
-    def _check(self, value):
-        if value is None and self.nullable:
-            return value
-        if not isinstance(value, (float, decimal.Decimal)):
-            raise TypeError(f'{value} should be a float or decimal.Decimal')
-        if isinstance(value, float):
-            value = decimal.Decimal(str(value))
-        return value
+    """
+    Attribute that allows decimal or float values, and optionally None
+    (if `nullable`).
+    """
 
-    def __set__(self, instance, value):
-        super().__set__(instance, self._check(value))
+    allowed_number_types = (decimal.Decimal, float)
 
-    def serialize(self, value):
-        value = self._check(value)
-        return None if value is None else str(value)
-
-    def deserialize(self, value):
-        if self.nullable and value is None:
-            return None
-        return decimal.Decimal(value)
 
 
 class Boolean(Attribute):
+
+    """
+    Attribute that allows boolean values, and optionally None (if `nullable).
+    """
+
+    TYPE = types.AttrType.BOOL
 
     def _check(self, value):
         if not (isinstance(value, bool) or (value is None and self.nullable)):
@@ -284,7 +282,29 @@ class Boolean(Attribute):
         return result
 
 
+class Null(Attribute):
+
+    TYPE = types.AttrType.NULL
+
+    def _check(self, value):
+        if not (value is True or (value is None and self.nullable)):
+            msg = f'value "{value}" should be True or None if nullable'
+            raise TypeError(msg)
+        return value
+
+    def __set__(self, instance, value):
+        super().__set__(instance, self._check(value))
+
+    def serialize(self, value):
+        return self._check(value)
+
+    def deserialize(self, value):
+        return value
+
+
 class List(Attribute):
+
+    TYPE = types.AttrType.L
 
     def _check(self, value):
         if not (isinstance(value, (list, tuple)) or
@@ -301,6 +321,8 @@ class List(Attribute):
 
 
 class Map(Attribute):
+
+    TYPE = types.AttrType.M
 
     def _check(self, value):
         if not isinstance(value, collections.abc.Mapping):
