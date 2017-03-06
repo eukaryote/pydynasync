@@ -11,11 +11,8 @@ def to_boto(obj):
 
 
 def list_of(convert1):
-
     def convert_all(obj):
-        if obj is None:
-            return []
-        else: return list(map(convert1, obj))
+        return [] if obj is None else list(map(convert1, obj))
     return convert_all
 
 
@@ -30,7 +27,7 @@ def attribute_definition(obj):
 
 def provisioned_throughput(obj):
     from .exp import ProvisionedThroughput
-    if obj == False:
+    if obj is False:
         obj = ProvisionedThroughput(False, None)
     elif not isinstance(obj, ProvisionedThroughput):
         if isinstance(obj, dict):
@@ -94,20 +91,18 @@ def stream_specification(obj):
             obj = StreamSpecification(**obj)
         elif isinstance(obj, tuple):
             if len(obj) == 1:
-                if obj[0] != False:
-                    msg = ("stream specification 1-tuple may only "
-                           "contain False")
-                    raise ValueError(msg)
+                if obj[0] is not False:
+                    raise ValueError("stream specification 1-tuple may only "
+                                     "contain False")
                 obj = StreamSpecification(False, None)
             elif len(obj) != 2:
-                msg = "stream specification tuple should be 1-tuple or 2-tuple"
-                raise ValueError(msg)
+                raise ValueError("stream specification tuple should be "
+                                 "1-tuple or 2-tuple")
             else:
                 obj = StreamSpecification(*obj)
         else:
-            msg = ("stream specification should be dict, 2-tuple or "
-                   "StreamSpecification")
-            raise ValueError(msg)
+            raise ValueError("stream specification should be dict, 2-tuple "
+                             "or StreamSpecification")
     return obj
 
 

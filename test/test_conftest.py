@@ -1,5 +1,3 @@
-import base64
-
 from pydynasync.types import AttrType, KeyType, ProjectionType
 import pydynasync.exp as exp
 

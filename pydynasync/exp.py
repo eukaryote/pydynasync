@@ -9,8 +9,6 @@ from botocore.exceptions import ClientError
 
 import boto3
 
-import attr
-
 from . import converters as C, validators as V
 from .types import KeyType, StreamViewType, AttrType
 
@@ -20,12 +18,13 @@ logging.basicConfig()
 
 DYNAMODB_CONFIG = botocore.config.Config(signature_version='s3v4')
 
+
 @attr.s
 class ProvisionedThroughput:
-   ReadCapacityUnits = attr.ib(convert=int)
-   WriteCapacityUnits = attr.ib(convert=int)
+    ReadCapacityUnits = attr.ib(convert=int)
+    WriteCapacityUnits = attr.ib(convert=int)
 
-   def to_boto(self):
+    def to_boto(self):
         return attr.asdict(self)
 
 
@@ -59,14 +58,17 @@ class Spec:
         return {
             'TableName': self.TableName,
             'KeySchema': list(k.to_boto() for k in self.KeySchema),
-            'AttributeDefinitions': list(a.to_boto()
-                                         for a in self.AttributeDefinitions),
+            'AttributeDefinitions': list(
+                a.to_boto() for a in self.AttributeDefinitions
+            ),
             'ProvisionedThroughput': self.ProvisionedThroughput.to_boto(),
             'StreamSpecification': self.StreamSpecification.to_boto(),
-            'LocalSecondaryIndexes': list(i.to_boto()
-                                          for i in self.LocalSecondaryIndexes),
-            'GlobalSecondaryIndexes': list(i.to_boto()
-                                           for i in self.GlobalSecondaryIndexes)
+            'LocalSecondaryIndexes': list(
+                i.to_boto() for i in self.LocalSecondaryIndexes
+            ),
+            'GlobalSecondaryIndexes': list(
+                i.to_boto() for i in self.GlobalSecondaryIndexes
+            )
         }
 
 
@@ -104,7 +106,7 @@ class LSI:
     def to_boto(self):
         return {
             'IndexName': self.IndexName,
-            'KeySchema':  list(k.to_boto() for k in self.KeySchema),
+            'KeySchema': list(k.to_boto() for k in self.KeySchema),
             'Projection': self.Projection.to_boto(),
         }
 
@@ -117,6 +119,7 @@ class GSI(LSI):
 
     def to_boto(self):
         return attr.asdict()
+
 
 @attr.s
 class StreamSpecification:
@@ -206,10 +209,9 @@ def main():
     print(client)
     name = 'Test'
     try:
-        table = client.describe_table(TableName=name)
-    except ClientError as e:
-        #e.response['Error']['Code']
-        resp = client.create_table(make_table_spec(name))
+        client.describe_table(TableName=name)
+    except ClientError:
+        client.create_table(make_table_spec(name))
 
 
 if __name__ == '__main__':

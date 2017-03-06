@@ -36,7 +36,6 @@ def ddb_shapes(ddb_model):
     return ddb_model['shapes']
 
 
-
 def test_attr_type(ddb_shapes):
     """Verify attribute type constants against botocore."""
     expected = set(a.value for a in T.AttrType)
@@ -55,9 +54,11 @@ def test_stream_view_type(ddb_shapes):
     actual = set(ddb_shapes['StreamViewType']['enum'])
     assert expected == actual
 
+
 def test_projection_type(ddb_shapes):
     expected = set(p.value for p in T.ProjectionType)
     actual = set(ddb_shapes['ProjectionType']['enum'])
+    assert expected == actual
 
 
 def test_attrtype_string_call():
@@ -109,7 +110,6 @@ def test_attrtype_binary_call():
     expected = list(map(base64.b64encode, data))
 
     assert T.AttrType.B() == {}
-
 
     assert T.AttrType.B(foo=data[0]) == {
         'foo': {
@@ -169,6 +169,7 @@ def test_attrtype_null_call():
 
     with pytest.raises(TypeError) as e:
         T.AttrType.NULL(a=False)
+    assert str(e.value) == 'bool True is only valid value for NULL type'
 
 
 def test_attrtype_stringset_call():
@@ -234,8 +235,7 @@ def test_attrtype_binaryset_call():
     }
 
 
-@pytest.mark.parametrize(
-    'attr_type,value', [
+@pytest.mark.parametrize('attr_type,value', [
     (T.AttrType.S, 'asdf'),
     (T.AttrType.N, 3.14),
     (T.AttrType.B, b'mybinarydata'),
@@ -249,17 +249,17 @@ def test_attrtype_binaryset_call():
     (T.AttrType.M, {'foobar': {'S': 'myfoobar'},
                     'qux': {'N': '42'},
                     'pvit': {'NS': ['1', '2', '3']}}),
-    (T.AttrType.M, {'top':
-                     {'M': {'middle':
-                             {'M': {'bottom': {'S': 'mybottom'}}}}}}),
+    (T.AttrType.M, {
+        'top':
+        {'M': {'middle': {'M': {'bottom': {'S': 'mybottom'}}}}}}),
 ])
 def test_attrtype_ddb_ops(client, test1_table, test1_spec, attr_type, value):
     tablename = test1_spec.TableName
     pk = '42'
     item = {
-       'Id': {
+        'Id': {
             'N': pk,
-       }
+        }
     }
     serialized = attr_type(MyValue=value)
     item.update(serialized)
@@ -289,6 +289,3 @@ def test_attrtype_ddb_ops(client, test1_table, test1_spec, attr_type, value):
         )
         print('delete_result:', delete_result)
         assert_success(delete_result)
-
-    # assert False
-

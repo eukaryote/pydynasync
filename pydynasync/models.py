@@ -1,8 +1,8 @@
 import collections
 from weakref import WeakKeyDictionary
 
-from . import ddb, util
-from .util import NOTFOUND, NOTSET
+from . import attributes, util
+from .util import NOTSET
 
 
 class Changes:
@@ -32,8 +32,6 @@ class Changes:
         self._changes[instance] = 0
 
 
-
-
 class ModelMeta(type):
 
     @classmethod
@@ -45,11 +43,37 @@ class ModelMeta(type):
         #       f'kwds={kwds}')
         ddb_name = kwds.pop('ddb_name', None) or name
         if kwds:
-            msg = "invalid class parameter(s): " + ', '.join(kwds.keys())
+            msg = "invalid model class parameter(s): " + ', '.join(kwds.keys())
             raise TypeError(msg)
         result = type.__new__(cls, name, bases, dict(namespace))
         result._members = tuple(x for x in namespace if not x.startswith('__'))
         result._ddb_name = ddb_name
+        # assert result._ddb_name == 'ModelMeta.not_ddb_name', result._ddb_name
+
+        # for user-defined models (not defined in this module),
+        # require one hash key and no more than one range keys:
+        if namespace['__module__'] != __name__:
+            hash_keys = []
+            range_keys = []
+            for member in result._members:
+                attr = namespace[member]
+                if isinstance(attr, attributes.Attribute):
+                    if attr.hash_key:
+                        hash_keys.append(attr)
+                    if attr.range_key:
+                        range_keys.append(attr)
+
+            if not hash_keys:
+                raise TypeError("model class '{}' does not define "
+                                "a hash_key attribute".format(name))
+            if len(range_keys) > 1:
+                raise TypeError("model class '{}' defines more than "
+                                "one range_key attribute".format(name))
+
+            # TODO: how best to expose these and other metadata?
+            result._hash_key = hash_keys[0]
+            result._range_key = range_keys[0] if range_keys else None
+
         return result
 
     @classmethod
@@ -76,12 +100,13 @@ class Model(metaclass=ModelMeta):
         members = type(self)._members
         for name in members:
             descriptor = getattr(type(self), name)
-            value = kwargs.pop(name, NOTSET)
-            if value is not NOTSET:
-                if _reset:
-                    descriptor.reset(self, value)
-                else:
-                    setattr(self, name, value)
+            if isinstance(descriptor, attributes.Attribute):
+                value = kwargs.pop(name, NOTSET)
+                if value is not NOTSET:
+                    if _reset:
+                        descriptor.reset(self, value)
+                    else:
+                        setattr(self, name, value)
         if kwargs:
             raise TypeError("invalid attributes: " + ', '.join(kwargs.keys()))
 

@@ -1,7 +1,5 @@
 from botocore.exceptions import ClientError
 
-import attr
-
 import pytest
 
 import pydynasync.exp as exp

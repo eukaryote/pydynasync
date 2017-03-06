@@ -1,153 +1,192 @@
 import base64
 import decimal
-import types
 
 import pytest
 
 from pydynasync import attributes as A, ddb, models as M
 from pydynasync import types as T
 
-from test import (
-    BooleanTest, DecimalTest, NullTest, NumberTest
+SCALAR_ATTRIBUTE_TYPES = (
+    A.String, A.Binary, A.Number, A.Integer, A.Decimal, A.Null, A.Boolean,
+)
+SET_ATTRIBUTE_TYPES = (
+    A.StringSet, A.BinarySet, A.NumberSet, A.IntegerSet, A.DecimalSet,
+)
+DOCUMENT_ATTRIBUTE_TYPES = (
+    A.List, A.Map,
 )
 
-
-def test_attribute_type():
-
-    with pytest.raises(ValueError) as e:
-
-        class MyModel(M.Model):
-            attr = A.Attribute()
-
-    assert str(e.value).startswith("`attr_type` is required if no")
-
-    attr_type = T.AttrType.B
-
-    class MyModel1(M.Model):
-
-        attr = A.Attribute(attr_type=attr_type)
+ATTRIBUTE_TYPES = (SCALAR_ATTRIBUTE_TYPES + SET_ATTRIBUTE_TYPES +
+                   DOCUMENT_ATTRIBUTE_TYPES)
 
 
-    assert MyModel1.attr.type is attr_type
-
-    class CustomAttribute(A.Attribute):
-
-        TYPE = T.AttrType.NS
-
-    class MyModel2(M.Model):
-
-        attr1 = CustomAttribute()
-        attr2 = CustomAttribute(attr_type=attr_type)
-
-    assert MyModel2.attr1.type is CustomAttribute.TYPE
-    assert MyModel2.attr2.type is attr_type
-
-
-def test_attribute_nullable():
-
-    class MyModel(M.Model):
-
-        attr1 = A.Attribute(attr_type=T.AttrType.S)
-        attr2 = A.Attribute(attr_type=T.AttrType.S, nullable=True)
-        attr3 = A.Attribute(attr_type=T.AttrType.S, nullable=False)
-
-    assert MyModel.attr1.nullable is False
-    assert MyModel.attr2.nullable is True
-    assert MyModel.attr3.nullable is False
+valid_attr_values = {
+    A.String: ('the', 'quick'),
+    A.Binary: (b'foo', b'bar'),
+    A.Number: (0, 1.1, -2, decimal.Decimal('1.1')),
+    A.Integer: (0, 1, -3189, 86500),
+    A.Decimal: (decimal.Decimal('0'), decimal.Decimal('1234.56')),
+    A.Null: (None,),
+    A.Boolean: (True, False),
+    A.List: (["1", 2, decimal.Decimal('3.3')], ),
+    A.Map: ({'foo': 'bar', 'baz': 'qux'}, )
+}
+valid_attr_values[A.StringSet] = (set(valid_attr_values[A.String]), )
+valid_attr_values[A.BinarySet] = (set(valid_attr_values[A.Binary]), )
+valid_attr_values[A.NumberSet] = (set(valid_attr_values[A.Number]), )
+valid_attr_values[A.IntegerSet] = (set(valid_attr_values[A.Integer]), )
+valid_attr_values[A.DecimalSet] = (set(valid_attr_values[A.Decimal]), )
 
 
-def test_attribute_ddb_name():
+invalid_attr_values = {
+    A.String: (b'foo', b'bar'),
+    A.Binary: ('the', 'quick'),
+    A.Number: ('1', False, type),
+    A.Integer: (1.1, decimal.Decimal('1')),
+    A.Decimal: (1, '1.1'),
+    A.Null: (True, False, 'None'),
+    A.Boolean: (0, 1, 'true'),
+}
+invalid_attr_values[A.StringSet] = (set(invalid_attr_values[A.String]), )
+invalid_attr_values[A.BinarySet] = (set(invalid_attr_values[A.Binary]), )
+invalid_attr_values[A.NumberSet] = (set(invalid_attr_values[A.Number]), )
+invalid_attr_values[A.IntegerSet] = (set(invalid_attr_values[A.Integer]), )
+invalid_attr_values[A.DecimalSet] = (set(invalid_attr_values[A.Decimal]), )
+invalid_attr_values[A.List] = ({1, 2, 3}, {'foo': 'bar'})
+invalid_attr_values[A.Map] = (['a', 'b'], 'foobar')
 
-    class MyModel(M.Model):
 
-        attr1 = A.Attribute(attr_type=T.AttrType.S)
-        attr2 = A.Attribute(attr_type=T.AttrType.S, ddb_name='myddbname')
-
-    assert MyModel.attr1.ddb_name == 'attr1'
-    assert MyModel.attr2.ddb_name == 'myddbname'
+# TODO: test serialization/deserialization
 
 
-def test_attribute_name():
+@pytest.fixture(params=ATTRIBUTE_TYPES)
+def ModelAttr(request):
+    Attr = request.param
 
     class MyModel(M.Model):
+        id1 = A.Integer(hash_key=True)
+        id2 = A.Integer(range_key=True)
+        required = Attr()
+        optional = Attr(nullable=True)
+        ddbnamed = Attr(ddb_name='myddbnamed')
 
-        attr1 = A.Attribute(attr_type=T.AttrType.S)
-        attr2 = A.Attribute(attr_type=T.AttrType.S, ddb_name='myddbname')
-
-    assert MyModel.attr1.name == 'attr1'
-    assert MyModel.attr2.name == 'attr2'
-
-
-def test_str_get(str1):
-    assert str1.model.required == str1.required
+    return MyModel, Attr
 
 
-def test_str_set(str1):
-    new_value = str1.model.required + 'X'
-    str1.model.required = new_value
-    assert str1.model.required == new_value
+def test_attribute_instanceof(ModelAttr):
+    Model, Attr = ModelAttr
+    assert isinstance(Model.required, Attr)
+    assert isinstance(Model.optional, Attr)
 
 
-def test_str_del_nullable(str1):
-    str1.model.optional = 'foo'
-    assert str1.model.optional == 'foo'
-    del str1.model.optional
-    assert str1.model.optional is None
+def test_attribute_type(ModelAttr):
+    Model, Attr = ModelAttr
+    assert Model.required.type is Attr.TYPE
+    assert Model.optional.type is Attr.TYPE
 
 
-def test_str_del_not_nullable(str1):
+def test_attribute_check_valid(ModelAttr):
+    Model, Attr = ModelAttr
+    for value in valid_attr_values[Attr]:
+        assert Model.required._check(value) == value
+        assert Model.optional._check(value) == value
+
+
+def test_attribute_check_invalid(ModelAttr):
+    Model, Attr = ModelAttr
+    for value in invalid_attr_values[Attr]:
+        with pytest.raises(TypeError) as e:
+            Model.required._check(value)
+
+        if Attr.TYPE is T.AttrType.NULL:
+            msg = 'expected None value '
+        else:
+            msg = 'expected value '
+        assert str(e.value).startswith(msg)
+
+        if value is None:
+            assert Model.optional._check(None) is None
+        elif Attr.TYPE is not T.AttrType.NULL:
+            with pytest.raises(TypeError) as e:
+                Model.optional._check(value)
+            assert str(e.value).startswith('expected value')
+
+
+def test_attribute_get_set(ModelAttr):
+    Model, Attr = ModelAttr
+    instance = Model()
+    for value in valid_attr_values[Attr]:
+        instance.required = value
+        assert instance.required == value
+        instance.optional = value
+        assert instance.optional == value
+        instance.ddbnamed = value
+        assert instance.ddbnamed == value
+
+
+def test_attribute_set_valid(ModelAttr):
+    Model, Attr = ModelAttr
+    instance = Model()
+    for value in valid_attr_values[Attr]:
+        instance.required = value
+        instance.optional = value
+
+
+def test_attribute_set_invalid(ModelAttr):
+    Model, Attr = ModelAttr
+    instance = Model()
+
+    original_required_value = instance.required
+    original_optional_value = instance.optional
+
+    for value in invalid_attr_values[Attr]:
+        with pytest.raises(TypeError) as e:
+            instance.required = value
+        assert str(e.value).startswith('expected ')
+        assert instance.required == original_required_value
+
+        with pytest.raises(TypeError) as e:
+            instance.optional = value
+        assert str(e.value).startswith('expected ')
+        assert instance.optional == original_optional_value
+
+
+def test_attribute_nullable(ModelAttr):
+    Model, Attr = ModelAttr
+    assert not Model.required.nullable
+    assert Model.optional.nullable
+    assert not hasattr(Model(), 'nullable')
+
+
+def test_scalar_attribute_names(ModelAttr):
+    Model, Attr = ModelAttr
+    assert Model.required.name == 'required'
+    assert Model.required.ddb_name == 'required'
+    assert Model.optional.name == 'optional'
+    assert Model.optional.ddb_name == 'optional'
+    assert Model.ddbnamed.name == 'ddbnamed'
+    assert Model.ddbnamed.ddb_name == 'myddbnamed'
+
+
+def test_attribute_del_nullable(ModelAttr):
+    Model, Attr = ModelAttr
+    value = valid_attr_values[Attr][0]
+
+    instance = Model()
+    instance.required = value
+    instance.optional = value
+    assert instance.required is value
+    assert instance.optional is value
+
+    del instance.optional
+    assert instance.optional is None
+
     with pytest.raises(TypeError) as e:
-        del str1.model.required
-    assert str(e.value) == 'required may not be null'
-
-
-@pytest.mark.parametrize('value', ['42', 'asdf'])
-def test_string_serialization_required(str1, value):
-    assert type(str1.model).required.serialize(value) == {
-        'required': {'S': value}
-    }
-
-
-@pytest.mark.parametrize('value', ['42', 'asdf', None])
-def test_string_serialization_optional(str1, value):
-    result = type(str1.model).optional.serialize(value)
-    expected = None if value is None else {
-        'optional': {'S': value}
-    }
-
-
-# TODO: serialization/deserialization tests for all types
-
-def test_intattr_required_get(intattr1):
-    assert intattr1.model.required == intattr1.required
-
-
-def test_intattr_required_set(intattr1):
-    a = intattr1.model
-    new_value = a.required + 1
-    a.required = new_value
-    assert a.required == new_value
-
-    with pytest.raises(TypeError) as e:
-        a.required = '42'
-    assert str(e.value) == "value '42' should be of type: int"
-
-
-def test_intattr_optional_set(intattr1):
-    a = intattr1.model
-
-    # can set to int
-    assert a.optional != a.required
-    a.optional = a.required
-    assert a.optional == a.required
-
-    # can set to null
-    a.optional = None
-
-    # can't set to non-int/none
-    with pytest.raises(TypeError) as e:
-        a.optional = '42'
-    assert str(e.value) == "value '42' should be of type: int"
+        del instance.required
+    expected = "{} attribute 'required' is not nullable and may not be deleted"
+    expected = expected.format(Attr.__name__)
+    assert str(e.value) == expected
+    assert instance.required is value
 
 
 def test_attribute_name_not_reserved_word():
@@ -156,7 +195,7 @@ def test_attribute_name_not_reserved_word():
     with pytest.raises(RuntimeError) as e:
 
         class P(M.Model):
-
+            id = A.Integer(hash_key=True)
             exists = A.String()
 
     cause = e.value.__cause__
@@ -166,28 +205,11 @@ def test_attribute_name_not_reserved_word():
     assert str(cause) == msg
 
 
-def test_attribute_name_ddb_name():
-
-    class P1(M.Model):
-
-        name = A.String(ddb_name='name_')
-
-
-    assert P1.name.ddb_name == 'name_'
-
-    class P2(M.Model):
-
-        name_ = A.String()
-
-    assert P2.name_.ddb_name == 'name_'
-
-
 def test_number_range():
 
     class P(M.Model):
-
+        id = A.Integer(hash_key=True)
         num = A.Number()
-
 
     p = P()
 
@@ -201,98 +223,6 @@ def test_number_range():
     assert str(e.value).endswith('is outside permitted numeric range')
 
 
-@pytest.mark.parametrize('value', [-1, 0, 1E75])
-def test_number_check_required_valid(value):
-    assert NumberTest.required._check(value) is value
-
-
-@pytest.mark.parametrize('value', [-1, 0, 1E75, None])
-def test_number_check_optional_valid(value):
-    assert NumberTest.optional._check(value) is value
-
-
-@pytest.mark.parametrize('value,result', [
-    (1, {'required': {'N': '1'}}),
-    (0, {'required': {'N': '0'}}),
-    (decimal.Decimal('1.1'), {'required': {'N': '1.1'}}),
-
-])
-def test_number_serialize_required(value, result):
-    assert NumberTest.required.serialize(value) == result
-
-
-@pytest.mark.parametrize('value,result', [
-    (1, {'required': {'N': '1'}}),
-    (decimal.Decimal('2.2'), {'required': {'N': '2.2'}}),
-    (0, {'required': {'N': '0'}}),
-])
-def test_number_deserialize_required(value, result):
-    assert NumberTest.required.deserialize(result) == value
-
-
-@pytest.mark.parametrize('value,result', [
-    (1.1, 1.1),
-    (decimal.Decimal('1.1'), decimal.Decimal('1.1'))
-])
-def test_decimal_check_required_value(value, result):
-    assert DecimalTest.required._check(value) == result
-
-
-@pytest.mark.parametrize('value,result', [
-    (1.1, 1.1),
-    (decimal.Decimal('1.1'), decimal.Decimal('1.1')),
-    (None, None),
-])
-def test_decimal_check_optional_value(value, result):
-    assert DecimalTest.optional._check(value) == result
-
-
-@pytest.mark.parametrize('value,result', [(True, 'true'), (False, 'false')])
-def test_boolean_serialization_required(value, result):
-    assert BooleanTest.required.serialize(value) == result
-    assert BooleanTest.required.deserialize(result) == value
-
-
-@pytest.mark.parametrize('value,result', [(True, 'true'), (False, 'false')])
-def test_boolean_serialization_optional(value, result):
-    assert BooleanTest.optional.serialize(value) == result
-    assert BooleanTest.optional.deserialize(result) == value
-
-
-@pytest.mark.parametrize('value', [type, 'foo', None])
-def test_boolean_check_required_wrong_types(value):
-    with pytest.raises(TypeError) as e:
-        BooleanTest.required._check(value)
-    assert str(e.value) == f'{value} should be a bool'
-
-
-@pytest.mark.parametrize('value', [True, False])
-def test_boolean_check_required_valid(value):
-    assert BooleanTest.required._check(value) is value
-
-
-@pytest.mark.parametrize('value', [type, 'foo', 0])
-def test_boolean_check_optional_wrong_types(value):
-    with pytest.raises(TypeError) as e:
-        BooleanTest.optional._check(value)
-    assert str(e.value) == f'{value} should be a bool'
-
-
-@pytest.mark.parametrize('value', [True, False, None])
-def test_boolean_check_optional_valid(value):
-    assert BooleanTest.optional._check(value) is value
-
-
-def test_attr_type_string():
-    expected = {
-        'FirstName': {'S': 'Jos'},
-        'LastName': {'S': 'Knecht'},
-    }
-    actual = T.AttrType.S(FirstName='Jos', LastName='Knecht')
-    assert expected == actual
-    assert T.AttrType.S() == {}
-
-
 def test_attr_type_binary():
     data = b'The Quick Brown Fox'
     expected = {
@@ -300,38 +230,6 @@ def test_attr_type_binary():
     }
     actual = T.AttrType.B(Title=data)
     assert expected == actual
-
-
-def test_null_check_required_valid():
-    assert NullTest.required._check(True) is True
-
-
-@pytest.mark.parametrize('value', [False, None, 1, '2'])
-def test_null_check_required_invalid(value):
-    with pytest.raises(TypeError) as e:
-        NullTest.required._check(False)
-    assert 'should be True or None' in str(e.value)
-
-
-@pytest.mark.parametrize('value', [True, None])
-def test_null_check_optional_valid(value):
-    assert NullTest.optional._check(value) is value
-
-
-@pytest.mark.parametrize('value', [False, None, 1, '2'])
-def test_null_check_optional_invalid(value):
-    with pytest.raises(TypeError) as e:
-        NullTest.optional._check(False)
-    assert 'should be True or None' in str(e.value)
-
-
-@pytest.mark.xfail
-def test_null_serialization_required():
-    assert NullTest.required.serialize(True) == {
-        'required': {
-            'NULL': True
-        }
-    }
 
 
 def test_attr_type_null():

@@ -3,12 +3,37 @@ import collections.abc
 import decimal
 import weakref
 
-from . import ddb, models, types, util
+from . import ddb, types, util
+
+# TODO: maybe change 'nullable' to 'required', with semantics of
+# allowing None for scalars, empty set for set types, and empty
+# list or map for document types.
 
 
 def check_number_range(value):
     if not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
         raise ValueError(f'{value} is outside permitted numeric range')
+
+
+class SetAttributeMixin:
+
+    def __init__(self, *args, **kwargs):
+        if kwargs.get('hash_key') or kwargs.get('range_key'):
+            raise TypeError("Set attribute cannot be used as a "
+                            "hash or range key")
+        super().__init__(*args, **kwargs)
+
+    def _check(self, value):
+        if not isinstance(value, (set, list, tuple)):
+            raise TypeError(
+                "expected value of type [set,list,tuple] for {} attribute "
+                "'{}', but received value '{}' of type [{}]".format(
+                    type(self).__name__, self.name,
+                    value, type(value).__name__))
+        check_item = super()._check
+        for elem in value:
+            check_item(elem)
+        return value
 
 
 class Attribute(metaclass=abc.ABCMeta):
@@ -18,7 +43,18 @@ class Attribute(metaclass=abc.ABCMeta):
     # is provided to `__init__`.
     TYPE = None
 
-    def __init__(self, *, nullable=False, ddb_name=None, attr_type=None):
+    # Tuple of allowed python types, which the default implementation
+    # of the `_check` method uses to type check attribute values.
+    # Checking based solely on types is handled automatically if
+    # the subclass sets the appropriate types, and the  `_check`
+    # method may be overridden for more complex checks.
+    # This is used for type-checking the value for non-set types, and
+    # for type-checking the items in a set for set-types that
+    # also define one or more types in `PYTHON_SET_TYPES`.
+    PYTHON_TYPES = ()
+
+    def __init__(self, *, nullable=False, ddb_name=None, attr_type=None,
+                 hash_key=False, range_key=False):
         self.__type = attr_type or self.TYPE
         if not isinstance(self.__type, types.AttrType):
             msg = ("`attr_type` is required if no default `TYPE` is "
@@ -29,8 +65,11 @@ class Attribute(metaclass=abc.ABCMeta):
         self.__index = None
         self.__nullable = nullable
         self.__ddb_name = ddb_name
+        self.__set_type = self.type.is_set_type()
         self.values = weakref.WeakKeyDictionary()
         self.original = weakref.WeakKeyDictionary()
+        self.__hash_key = hash_key
+        self.__range_key = range_key
 
     @property
     def type(self):
@@ -48,6 +87,14 @@ class Attribute(metaclass=abc.ABCMeta):
     def name(self):
         return self.__name
 
+    @property
+    def hash_key(self):
+        return self.__hash_key
+
+    @property
+    def range_key(self):
+        return self.__range_key
+
     def reset(self, instance, value):
         """
         Set value for instance and use that value as the original value
@@ -64,17 +111,15 @@ class Attribute(metaclass=abc.ABCMeta):
 
     def __set__(self, instance, value):
         value = self._check(value)
-        # if value is None:
-        #     if not self.nullable:
-        #         raise TypeError(f'{self.__name} may not be null')
 
+        # if value is unchanged, we don't need to do anything
         if self.values.get(instance, util.NOTFOUND) == value:
             return
 
         update = getattr(
             type(type(instance))._changes,
             'unset' if value == self.original.get(instance, util.NOTFOUND)
-                     else 'set',
+            else 'set',
         )
         update(instance, self.__index)
         self._set(instance, value)
@@ -84,10 +129,13 @@ class Attribute(metaclass=abc.ABCMeta):
 
     def __delete__(self, instance):
         if not self.nullable:
-            raise TypeError(f'{self.__name} may not be null')
+            raise TypeError("{} attribute '{}' is not nullable and may not "
+                            "be deleted".format(type(self).__name__,
+                                                self.name))
         self.values.pop(instance, None)
 
     def __set_name__(self, owner, name):
+        from . import models
         if not issubclass(owner, models.Model):
             msg = "model attributes may only be class attributes of a Model"
             raise TypeError(msg)
@@ -118,8 +166,21 @@ class Attribute(metaclass=abc.ABCMeta):
         Subclasses should call this to get the null check and then
         do whatever additional checks may be needed
         """
-        if value is None and not self.nullable:
-            raise TypeError(f"'{self.name}' attribute is not nullable")
+        if value is None:
+            if not self.nullable:
+                allowed = ', '.join(t.__name__ for t in self.PYTHON_TYPES)
+                raise TypeError(
+                    "expected non-None value of type [{}] for non-nullable "
+                    "{} attribute '{}', but received value 'None'".format(
+                        allowed, type(self).__name__, self.name))
+        else:
+            if not isinstance(value, self.PYTHON_TYPES):
+                allowed = ', '.join(t.__name__ for t in self.PYTHON_TYPES)
+                raise TypeError(
+                    "expected value of type [{}] for {} attribute '{}', "
+                    "but received value '{}' of type [{}]".format(
+                        allowed, type(self).__name__, self.name,
+                        value, type(value).__name__))
         return value
 
     def serialize(self, value):
@@ -140,9 +201,6 @@ class Attribute(metaclass=abc.ABCMeta):
 
 Attribute._indexes = weakref.WeakKeyDictionary()
 
-#TODO: this serialization/deserialization stuff should be
-# usable by these attributes (high-level ORM) as well as
-# by the calls like AttrType.S(Name="Jos K") (low-level API).
 
 class String(Attribute):
 
@@ -151,29 +209,17 @@ class String(Attribute):
     """
 
     TYPE = types.AttrType.S
-
-    def _check(self, value):
-        value = super()._check(value)
-        if value is not None and not isinstance(value, str):
-            raise TypeError(f'String attribute requires a str value, not '
-                            f'{type(value)}')
-        return value
+    PYTHON_TYPES = (str,)
 
 
-class StringSet(Attribute):
+class StringSet(SetAttributeMixin, Attribute):
 
     """
     Attribute that allows a set of strings, and optionally None (if `nullable).
     """
 
     TYPE = types.AttrType.SS
-
-    def _check(self, value):
-        value = super()._check(value)
-        if value is not None and not (isinstance(value, set) and
-                                      all(isinstance(v, str) for v in value)):
-            raise TypeError(f'StringSet attribute requires a set of str')
-        return value
+    PYTHON_TYPES = String.PYTHON_TYPES
 
     def serialize(self, value):
         value = self._check(value)
@@ -188,22 +234,27 @@ class StringSet(Attribute):
 class Binary(Attribute):
 
     """
-    Attribute that allows bytes values, and optionally None (if `nullable).
+    Attribute that allows bytes values.
     """
 
     TYPE = types.AttrType.B
-
-    def __set__(self, instance, value):
-        if not (isinstance(value, bytes) or (value is None and self.nullable)):
-            msg = f'BinaryAttribute requires bytes value, not {type(value)}'
-            raise TypeError(msg)
+    PYTHON_TYPES = (bytes, bytearray)
 
     def _check(self, value):
-        if value is None and self.nullable:
-            return None
-        elif not isinstance(value, bytes):
+        value = super()._check(value)
+        if value is not None and not isinstance(value, (bytearray, bytes)):
             raise TypeError(value)
         return value
+
+
+class BinarySet(SetAttributeMixin, Attribute):
+
+    """
+    Attribute that allows a set of bytes or bytearray values.
+    """
+
+    TYPE = types.AttrType.BS
+    PYTHON_TYPES = Binary.PYTHON_TYPES
 
 
 class Number(Attribute):
@@ -216,19 +267,35 @@ class Number(Attribute):
     """
 
     TYPE = types.AttrType.N
-
-    allowed_number_types = (int, float, decimal.Decimal)
+    PYTHON_TYPES = (int, float, decimal.Decimal)
 
     def _check(self, value):
         value = super()._check(value)
         if value is not None:
-            if not isinstance(value, self.allowed_number_types):
-                exp = ', '.join(t.__name__ for t in self.allowed_number_types)
-                msg = f"value '{value}' should be of type: {exp}"
-                raise TypeError(msg)
-            elif not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
+            # don't allow True/False, even though there are technically ints
+            if value is True or value is False:
+                allowed = ', '.join(t.__name__ for t in self.PYTHON_TYPES)
+                raise TypeError(
+                    "expected value of type [{}] for {} attribute '{}', "
+                    "but received value '{}' of type [{}]".format(
+                        allowed, type(self).__name__, self.name,
+                        value, type(value).__name__))
+            if not (ddb.NUMBER_RANGE[0] < value < ddb.NUMBER_RANGE[1]):
                 raise ValueError(f'{value} is outside permitted numeric range')
         return value
+
+    def __set__(self, instance, value):
+        super().__set__(instance, self._check(value))
+
+
+class NumberSet(SetAttributeMixin, Attribute):
+
+    """
+    Attribute that allows int, decimal, and float values.
+    """
+
+    TYPE = types.AttrType.NS
+    PYTHON_TYPES = Number.PYTHON_TYPES
 
 
 class Integer(Number):
@@ -237,7 +304,17 @@ class Integer(Number):
     Attribute that allows integer values, and optionally None (if `nullable`).
     """
 
-    allowed_number_types = (int,)
+    PYTHON_TYPES = (int,)
+
+
+class IntegerSet(SetAttributeMixin, Attribute):
+
+    """
+    Attribute that allows a set of integer values.
+    """
+
+    TYPE = types.AttrType.NS
+    PYTHON_TYPES = Integer.PYTHON_TYPES
 
 
 class Decimal(Number):
@@ -247,8 +324,17 @@ class Decimal(Number):
     (if `nullable`).
     """
 
-    allowed_number_types = (decimal.Decimal, float)
+    PYTHON_TYPES = (decimal.Decimal, float)
 
+
+class DecimalSet(SetAttributeMixin, Attribute):
+
+    """
+    Attribute that allows a set of decimal.Decimal values.
+    """
+
+    TYPE = types.AttrType.NS
+    PYTHON_TYPES = Decimal.PYTHON_TYPES
 
 
 class Boolean(Attribute):
@@ -258,11 +344,7 @@ class Boolean(Attribute):
     """
 
     TYPE = types.AttrType.BOOL
-
-    def _check(self, value):
-        if not (isinstance(value, bool) or (value is None and self.nullable)):
-            raise TypeError(f'{value} should be a bool')
-        return value
+    PYTHON_TYPES = (bool,)
 
     def __set__(self, instance, value):
         super().__set__(instance, self._check(value))
@@ -285,21 +367,14 @@ class Boolean(Attribute):
 class Null(Attribute):
 
     TYPE = types.AttrType.NULL
+    PYTHON_TYPES = (type(None),)
 
     def _check(self, value):
-        if not (value is True or (value is None and self.nullable)):
-            msg = f'value "{value}" should be True or None if nullable'
-            raise TypeError(msg)
-        return value
-
-    def __set__(self, instance, value):
-        super().__set__(instance, self._check(value))
-
-    def serialize(self, value):
-        return self._check(value)
-
-    def deserialize(self, value):
-        return value
+        # override to give better error message
+        if value is not None:
+            raise TypeError("expected None value for Null attribute '{}', "
+                            "but received value '{}'".format(self.name, value))
+        return None
 
 
 class List(Attribute):
@@ -309,7 +384,10 @@ class List(Attribute):
     def _check(self, value):
         if not (isinstance(value, (list, tuple)) or
                 (value is None and self.nullable)):
-            raise TypeError(f'{value} should be a list or tuple')
+            raise TypeError("expected value of type [list, tuple] for List "
+                            "attribute '{}', but received value '{}' "
+                            "of type [{}]".format(self.name, value,
+                                                  type(value).__name__))
         return value
 
     def __set__(self, instance, value):
@@ -325,8 +403,14 @@ class Map(Attribute):
     TYPE = types.AttrType.M
 
     def _check(self, value):
-        if not isinstance(value, collections.abc.Mapping):
-            raise TypeError(f'{value} should be a mapping')
+        # TODO: check value in map
+        if (not isinstance(value, collections.abc.Mapping) or
+                not (value or self.nullable)):
+            raise TypeError("expected value of type [mapping] for Map "
+                            "attribute '{}', but received value '{}' "
+                            "of type [{}]".format(self.name, value,
+                                                  type(value).__name__))
+        return value
 
     def __set__(self, instance, value):
         super().__set__(instance, self._check(value))
@@ -334,4 +418,3 @@ class Map(Attribute):
     def serialize(self, value):
         value = self._check(value)
         return None if value is None else value
-

@@ -1,12 +1,9 @@
 import types
 
-from botocore.exceptions import ClientError
-
 import pytest
 
 from pydynasync import devguide, exp
-from pydynasync import attributes as A, models as M
-from pydynasync.types import KeyType, ProjectionType, StreamViewType, AttrType
+from pydynasync import models as M
 
 from test import StringTest, IntegerTest, Person
 
@@ -15,10 +12,12 @@ from test import StringTest, IntegerTest, Person
 def str1():
     m = StringTest()
     m.required = 'required-value'
+    assert StringTest._members == ('id', 'required', 'optional')
     return types.SimpleNamespace(
         model=m,
         required=m.required,
-        members=('required', 'optional'),
+        members=('id', 'required', 'optional'),
+        # members = StringTest._members
     )
 
 
@@ -30,22 +29,24 @@ def intattr1():
     return types.SimpleNamespace(
         model=m,
         required=m.required,
-        members=('required', 'optional'),
+        members=('id', 'required', 'optional'),
     )
 
 
 @pytest.fixture
 def person1():
     person = Person()
+    person.id = 1234
     person.name_ = 'Job Bluth'
     person.age = 35
     M.ModelMeta.clear_changed(person)
     return types.SimpleNamespace(
         person=person,
+        id=person.id,
         name_=person.name_,
         nickname=person.nickname,
         age=person.age,
-        members=('name_', 'nickname', 'age'),
+        members=('id', 'name_', 'nickname', 'age'),
     )
 
 
@@ -123,4 +124,3 @@ def session():
 @pytest.fixture
 def client(session):
     return exp.get_client(session=session)
-

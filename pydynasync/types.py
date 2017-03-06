@@ -1,14 +1,10 @@
 import base64
 import decimal
 import enum
-import itertools
 from .serialization import (
     make_scalar_converter, make_set_converter, null_converter,
     make_serialization_helpers, pack_set
 )
-
-def identity(obj):
-    return obj
 
 
 class EnumBase:
@@ -92,10 +88,10 @@ class AttrType(EnumBase, enum.Enum):
 AttrType.B.convert = make_scalar_converter(str, {bytes: base64.b64encode})
 AttrType.N.convert = make_scalar_converter(
     str,
-   {str: lambda s: str(decimal.Decimal(s)),
-    float: lambda x: str(decimal.Decimal(str(x))),
-    int: str,
-    decimal.Decimal: str},
+    {str: lambda s: str(decimal.Decimal(s)),
+     float: lambda x: str(decimal.Decimal(str(x))),
+     int: str,
+     decimal.Decimal: str},
     force=True,
 )
 AttrType.S.convert = make_scalar_converter(str, {})
@@ -121,16 +117,18 @@ AttrType.S.serialize, AttrType.S.deserialize = make_serialization_helpers(
     AttrType.S.convert,
     lambda s: s,
 )
-AttrType.BOOL.serialize, AttrType.BOOL.deserialize = make_serialization_helpers(
-    AttrType.BOOL,
-    AttrType.BOOL.convert,
-    lambda b: b,
-)
-AttrType.NULL.serialize, AttrType.NULL.deserialize = make_serialization_helpers(
-    AttrType.NULL,
-    AttrType.NULL.convert,
-    lambda b: None,
-)
+AttrType.BOOL.serialize, AttrType.BOOL.deserialize = \
+    make_serialization_helpers(
+        AttrType.BOOL,
+        AttrType.BOOL.convert,
+        lambda b: b,
+    )
+AttrType.NULL.serialize, AttrType.NULL.deserialize = \
+    make_serialization_helpers(
+        AttrType.NULL,
+        AttrType.NULL.convert,
+        lambda b: None,
+    )
 AttrType.SS.serialize, AttrType.SS.deserialize = make_serialization_helpers(
     AttrType.SS,
     make_set_converter(AttrType.S.convert),
@@ -139,12 +137,12 @@ AttrType.SS.serialize, AttrType.SS.deserialize = make_serialization_helpers(
 AttrType.NS.serialize, AttrType.NS.deserialize = make_serialization_helpers(
     AttrType.NS,
     make_set_converter(AttrType.N.convert),
-    lambda s: set(map(AttrType.N.deserialize, value)),
+    lambda value: set(map(AttrType.N.deserialize, value)),
 )
 AttrType.BS.serialize, AttrType.BS.deserialize = make_serialization_helpers(
     AttrType.BS,
     make_set_converter(AttrType.B.convert),
-    lambda s: set(map(AttrType.B.deserialize, value)),
+    lambda value: set(map(AttrType.B.deserialize, value)),
 )
 
 

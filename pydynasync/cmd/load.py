@@ -26,7 +26,7 @@ def delete_table(client, table_name, *, wait=True):
 
 
 def put_json(client, data):
-    for table_name, elems  in data.items():
+    for table_name, elems in data.items():
         print('TableName=%s: ' % (table_name,), sep='', end='')
         delete_table(client, table_name, wait=True)
         spec = devguide.specs[table_name]
@@ -41,7 +41,6 @@ def put_json(client, data):
         print()
 
 
-
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -52,7 +51,6 @@ def main(argv=None):
     data = read_json(path)
     client = exp.get_client()
     put_json(client, data)
-
 
 
 if __name__ == '__main__':

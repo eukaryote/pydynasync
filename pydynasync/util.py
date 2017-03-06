@@ -11,8 +11,9 @@ NOTSET = object()
 
 _weakkeydict_codes = tuple(
     func.__code__ for _, func in
-        inspect.getmembers(weakref.WeakKeyDictionary, inspect.isfunction)
+    inspect.getmembers(weakref.WeakKeyDictionary, inspect.isfunction)
 )
+
 
 def is_weakref_call(*, framenum=2):
     """

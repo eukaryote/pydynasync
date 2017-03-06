@@ -1,8 +1,6 @@
-import base64
-import collections.abc
-import datetime
-import decimal
-import json
+# import datetime
+# import decimal
+# import json
 
 
 def null_converter(value):
@@ -76,7 +74,6 @@ def make_serialization_helpers(attr_type, convert_to, convert_from):
 
 
 def pack_set(attr_type, attr_name, attr_value):
-    from . import types
     if not isinstance(attr_name, str):
         raise TypeError(attr_name)
     if not attr_type.is_set_type():
@@ -87,7 +84,6 @@ def pack_set(attr_type, attr_name, attr_value):
             attr_type.value: attr_value,
         }
     }
-
 
 
 """
