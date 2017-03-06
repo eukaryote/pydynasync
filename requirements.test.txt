@@ -1,3 +1,4 @@
 pytest
 pytest-tornasync
+pytest-flake8
 mypy
